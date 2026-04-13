@@ -1,0 +1,36 @@
+{
+  "model_path": "yolov8n.pt",
+  "conf_threshold": 0.4,
+  "imgsz": 640,
+  "frame_rate": 25,
+  "process_every_n_frames": 2,
+  "resize_width": 960,
+  "periodic_log_sec": 10,
+  "reconnect_interval": 2.0,
+  "max_retries": 0,
+  "bus_id": "bus-1",
+  "stop_id": "1",
+  "streams": [
+    {
+      "name": "Door 1",
+      "door_id": "1",
+      "source": 0,
+      "line": [[50, 260], [900, 260]],
+      "csv_path": "reports/door_1_counts.csv"
+    },
+    {
+      "name": "Door 2",
+      "door_id": "2",
+      "source": "Video.mp4",
+      "line": [[50, 260], [900, 260]],
+      "csv_path": "reports/door_2_counts.csv"
+    },
+    {
+      "name": "Door 3",
+      "door_id": "3",
+      "source": "Video.mp4",
+      "line": [[50, 260], [900, 260]],
+      "csv_path": "reports/door_3_counts.csv"
+    }
+  ]
+}
