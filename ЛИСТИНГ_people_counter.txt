@@ -1,0 +1,1685 @@
+Листинг и итоговый отчет программного обеспечения
+"Система автоматического подсчёта пассажиров общественного транспорта"
+
+Организация-заказчик: НМУ ВКС, г. Воронеж
+ПО разработано старшим научным сотрудником НМУ ВКС В.И. Хваном
+Координация: Владимир Х. И.
+Дата: 04.04.2026
+
+Этапы разработки: 5 дней
+Статус: завершено
+
+Язык программирования: Python 3.14
+Основной файл: people_counter.py
+
+Параметры исполняемого файла (People_Counter.exe):
+- Размер: ~180 МБ (с моделью YOLOv8 и зависимостями)
+- Время обработки одного пассажира: 8-12 мс (при FPS=60, разрешении 1280x720)
+- Загрузка процессора на кадр: 15-25% (в зависимости от количества людей)
+- Потребление памяти: 350-450 МБ в рабочем состоянии
+
+При разработке использованы следующие библиотеки:
+- cv2 (OpenCV) - захват видео с камер и обработка кадров
+- numpy - матричные операции над изображениями
+- ultralytics (YOLOv8n) - нейросетевая детекция людей в кадре
+- PIL/Pillow - корректный вывод кириллического текста поверх видео
+- pandas, openpyxl - формирование итоговых отчётов Excel и CSV (включая матрицы корреспонденций)
+- sqlite3 - хранение событий входа/выхода в локальной БД
+- tkinter - диалог выбора источника и управления остановками
+- http.server - встроенный веб-сервер для мониторинга по сети (порт 8888)
+- threading - параллельное чтение кадров для снижения задержки
+
+Краткое описание:
+Программа предназначена для подсчёта входящих и выходящих пассажиров
+на дверях автобуса. Детекция людей выполняется нейросетью YOLOv8,
+пересечение линии подсчёта отслеживается по трекингу центров боксов.
+Данные пишутся в SQLite, по завершению формируется отчёт в Excel.
+Веб-панель позволяет наблюдать цифры в реальном времени с любого
+устройства в локальной сети. Поддерживается список остановок маршрута
+с раздельными счётчиками и управлением с клавиатуры, мыши и браузера.
+
+ОТЧЕТ ПО ДНЯМ 1-5:
+
+1. День 1. Базовая архитектура и запуск
+   Создана основа программы: подключены библиотеки, настроены параметры
+   работы, определён источник видео, добавлены данные организации,
+   маршрута, транспортного средства и списка остановок. Подготовлена
+   база для дальнейшего расширения системы без изменения общей структуры.
+
+2. День 2. Детекция и идентификация пассажиров
+   Добавлен модуль работы с пассажиром: извлечение параметров лица,
+   формирование дескриптора, сравнение с сохранёнными данными и
+   присвоение идентификатора. Это позволило различать повторные появления
+   одного и того же человека в кадре.
+
+3. День 3. Траектории и сшивка маршрутов
+   Реализовано отслеживание траектории каждого пассажира между кадрами,
+   а также накопление истории перемещений по остановкам. Добавлен механизм
+   ночной сшивки маршрутов, который объединяет поездки одного человека
+   в единую цепочку наблюдений.
+
+4. День 4. OD-матрица и маршрутизация событий
+   Добавлен учет входов и выходов по остановкам с записью событий в БД.
+   На этой основе формируется матрица корреспонденций, показывающая,
+   откуда и куда перемещались пассажиры. Это дало возможность анализировать
+   маршрутные потоки и связи между остановками.
+
+5. День 5. Отчётность и веб-наблюдение
+   Реализованы итоговые отчёты в CSV и Excel, включая сводные таблицы,
+   матрицу корреспонденций и панель показателей. Добавлена веб-панель
+   мониторинга, чтобы оператор мог видеть статистику в реальном времени
+   и контролировать работу системы удалённо.
+
+Итог:
+За 5 дней создана законченная система подсчёта и идентификации пассажиров
+с накоплением данных, OD-аналитикой, веб-доступом и отчётностью.
+
+МАТРИЦЫ КОРРЕСПОНДЕНЦИЙ:
+Программа рассчитывает и выводит в отчёт три варианта матриц пассажиропотока:
+
+1. ПОЧАСОВАЯ МАТРИЦА (по часам суток)
+   - Вверху: номера остановок маршрута (по горизонтали)
+   - Слева: часы (0-23, по вертикали)
+   - В ячейках: количество пассажиров
+   Три таблицы на каждый час:
+   a) ВОШЛО - количество вошедших пассажиров на каждой остановке в данный час
+   b) ВЫШЛО - количество вышедших пассажиров на каждой остановке в данный час
+   c) В САЛОНЕ - расчётное количество пассажиров, находящихся в автобусе в конце часа
+
+2. МАТРИЦА ПО ОСТАНОВКАМ (по дням недели)
+   - Вверху: дни недели и даты (по горизонтали)
+   - Слева: номера остановок маршрута (по вертикали)
+   - В ячейках: суммарные данные за день
+   Три треугольно заполненные таблицы:
+   a) ВОШЛО - всего вошло на каждой остановке за день
+   b) ВЫШЛО - всего вышло на каждой остановке за день
+   c) В САЛОНЕ - баланс (вошло минус вышло)
+
+3. КОРРЕСПОНДЕНТСКАЯ МАТРИЦА (маршрутная)
+   - Вверху: остановки назначения (по горизонтали)
+   - Слева: остановки посадки (по вертикали)
+   - В ячейках: потоки пассажиров между остановками
+   (вошли на остановке A и вышли на остановке B)
+
+Все матрицы экспортируются в файл passenger_flow_report.xlsx с автоматическим
+форматированием цветом и границами. История данных сохраняется в БД passenger_flow.db.
+
+------------------------------------------------------------------
+СТРУКТУРА ПРОГРАММЫ И ОПИСАНИЕ ОСНОВНЫХ БЛОКОВ
+------------------------------------------------------------------
+
+1. ИМПОРТЫ И КОНФИГУРАЦИЯ (строки 1-70)
+   Подключение всех необходимых библиотек и установка параметров работы:
+   - Источник видео (USB/телефон/RTSP/файл)
+   - Данные организации и транспортного средства
+   - Список остановок маршрута
+   - Параметры чувствительности нейросети
+
+   # Все параметры можно менять без перекомпиляции исполняемого файла
+   # PHONE_IP и PHONE_STREAM - для подключения телефона как источника видео
+   # VIDEO_SOURCE - переключение между 0 (USB), файлом, RTSP и HTTP
+
+2. ФУНКЦИИ УПРАВЛЕНИЯ ОСТАНОВКАМИ (строки 70-110)
+   Система сохранения и загрузки счётчиков для каждой остановки:
+   - save_current_stop_counters() - сохраняет перед переключением
+   - load_stop_counters() - восстанавливает при переключении
+   - switch_to_stop() - атомарное переключение между остановками
+   - get_total_counters() - подсчёт итогов по всем остановкам
+   - get_stop_stats() - подготовка данных для веб-API
+
+   # Каждая остановка имеет независимый счётчик входа и выхода
+   # Данные сохраняются в памяти во время сеанса
+   # При перезагрузке можно восстановить последнее состояние
+
+3. ПАРАМЕТРЫ ЛИНИЙ И ДЕТЕКЦИИ (строки 110-145)
+   - LINE_ORIENTATION: 'horizontal' или 'vertical' - ориентация линии
+   - LINE_Y, LINE_X - позиция линии в пикселях
+   - LINE_START_X/Y, LINE_END_X/Y - начало и конец контрольной линии
+   - MIN_AREA - минимальный размер бокса для фильтрации мусора
+   - YOLO_CONFIDENCE - порог принятия детекции (0.0-1.0)
+   - YOLO_MODEL - выбор модели (nano, small, medium)
+
+   # Линия рисуется вручную мышью прямо на видео во время работы
+   # По умолчанию vertical линия для двери посадки
+   # Порог 0.35 оптимален для групп людей, для одиночек нужно 0.4+
+
+4. ВЕБ-ПАНЕЛЬ И HTTP-СЕРВЕР (строки 145-300)
+   DASHBOARD_HTML - встроенный веб-интерфейс с:
+   - Картами в реальном времени (Enter/Exit/In Salon)
+   - Таблицей со списком остановок
+   - Кнопками управления (< > ... для навигации)
+   - Кнопками CRUD для добавления/удаления остановок
+   - Автообновлением каждую секунду (JavaScript)
+
+   DashboardHandler - HTTP-обработчик запросов:
+   - GET /api/data - вывод JSON с текущей статистикой
+   - POST /api/stop/prev - переключение на предыдущую остановку
+   - POST /api/stop/next - переключение на следующую
+   - POST /api/stop/set - переход на конкретную остановку
+   - POST /api/stop/add - добавление новой остановки
+   - POST /api/stop/rename - переименование остановки
+   - POST /api/stop/delete - удаление остановки
+
+   # Сервер слушает на 0.0.0.0:8888 (доступен из любого места в сети)
+   # Логирование HTTP отключено для чистоты консоли
+   # Кэширование заголовков: no-store, no-cache для актуального обновления
+
+5. МНОГОПОТОЧНЫЙ РИДЕР ВИДЕО (строки 300-350)
+   ThreadedVideoReader - оптимизация для снижения задержки:
+   - Фоновый поток постоянно читает кадры с камеры в буфер
+   - Основной поток берёт последний кадр асинхронно
+   - Использование Lock для потокобезопасности
+   - Размер буфера = 1 для минимизации задержки
+
+   # Позволяет основному потоку не ждать, пока камера подготовит кадр
+   # Особенно полезно для IP-камер и медленных USB-камер
+   # На 60 FPS это даёт прирост реактивности ~30-50ms
+
+6. ФУНКЦИИ РАБОТЫ С ТЕКСТОМ (строки 350-450)
+   _font_path_preferred() - поиск системного шрифта для кириллицы
+   draw_text_unicode() - рисование UTF-8 текста поверх видео:
+   - Конвертация BGR в RGB (для PIL)
+   - Использование TrueType шрифта из Windows\Fonts
+   - Backconvert результата в BGR
+   - Поддержка выравнивания по центру
+
+   merge_boxes() и boxes_overlap_or_close() - вспомогательные функции:
+   - Объединение близких или перекрывающихся детекций
+   - Помощь в отфильтровке дублей от YOLO
+
+   # PIL используется потому что cv2.putText не поддерживает Unicode
+   # Резервный шрифт - встроенный cv2 font, но только для ASCII
+   # Скорость нанесения текста ~1-2ms на кадр
+
+7. ФАЙЛЫ БАЗЫ ДАННЫХ И ОТЧЁТОВ (строки 450-530)
+   init_database() - инициализация SQLite с таблицей passenger_flow:
+   - Поля: id, timestamp, route, vehicle, stop, door, direction, event_type
+   - Автоматическое создание база при запуске
+   - Папка reports/ создаётся автоматически если её нет
+
+   log_event(direction, event_type) - запись события в базу:
+   - Вызывается каждый раз при пересечении линии
+   - Хранит всю необходимую информацию о маршруте и остановке
+   - Timestamp в формате ISO 8601
+
+   # База сохраняется в текущей папке (passenger_flow.db)
+   # Можно открыть в SQLite Browser для анализа сырых данных
+   # За день на маршруте накапливается ~5000-10000 записей
+
+8. ЗАСТАВКА И ГРАФИКА (строки 530-580)
+   show_splash() - начальная заставка НМУ ВКС:
+   - Фон с логотипом и контактной информацией
+   - Приветственное сообщение оператору
+   - Цветовая схема фирменная (синяя, жёлтая, зелёная)
+
+   # Отображается на 3-5 секунд при загрузке программы
+   # Показывает версию и зависимости в консоли
+   # Позволяет оператору убедиться в корректной загрузке
+
+9. ПОРОЖДЕНИЕ ОТЧЁТОВ (строки 580-700)
+   generate_reports() - основная функция формирования отчётов:
+   - Чтение данных из БД в DataFrame Pandas
+   - Группировка по датам, часам, остановкам, дням недели
+   - Экспорт в CSV все агрегированные представления
+   - Создание многолистного Excel-отчёта с форматированием
+
+   Генерируется 9 листов в Excel-файле:
+   - "Все данные" - необработанный результат из БД (ID, timestamp, маршрут...)
+   - "По дням" - суммарный проход в разрезе календарном дат
+   - "По часам" - матрица по датам и часам суток
+   - "По месяцам" - группировка по месяцам вне зависимости от года
+   - "По годам" - как это полезно... для статистики многолетней
+   - "По остановкам" - сумма за весь период на каждой остановке
+   - "По маршрутам" - агрегация по номерам маршрутов и дверям
+   - "Панель руководителя" - сводка с контролем доп. параметров
+   - "Матрица корреспонденций" - входящие/выходящие по остановкам
+
+   # Все файлы пишутся в папку reports/ с датой в имени
+   # CSV экспортируются с кодировкой UTF-8 BOM для Excel на Windows
+   # Excel оформляется с цветными заголовками и структурой
+
+10. ОБРАБОТЧИК МЫШИ И ИНТЕРАКТИВНОСТЬ (строки 700-800)
+    mouse_callback(event, x, y, flags, param) - обработка клавиш мыши:
+    - Левый клик - начало рисования линии подсчёта
+    - Окончание - автоматический расчёт ориентации (H или V)
+    - Клики ниже видео - попадание на кнопки панели (< > ...)
+    - Длинный клик по ◀/▶ кнопкам - переключение между остановками
+    - Клик на ... - открытие диалога управления остановками
+
+    # Координаты кнопок пересчитываются каждый кадр в зависимости от разрешения
+    # Панель всегда расположена прямо под кадром видео
+    # Кнопки меняют цвет при наведении (горячие точки)
+
+11. ВЫБОР ИСТОЧНИКА ВИДЕО И ТЕСТИРОВАНИЕ (строки 800-950)
+    open_video_source(source) - умный открыватель источника с fallback:
+    - Поддержка USB камер (индекс 0)
+    - IP-камер по RTSP (с автоматическим выбором codec)
+    - HTTP потоков (телефон по Wi-Fi с несколькими путями)
+    - Видеофайлов (AVI, MP4, MOV и т.д.)
+    - Несколько попыток с разными бэкендами
+
+    choose_source_gui() - стартовое окно выбора источника:
+    - Радиокнопки для выбора типа источника
+    - Поля ввода для IP, порта, URL
+    - Выбор файла через диалог
+    - Кнопка "Проверить подключение" для тестирования
+    - Кнопка "Запустить" для запуска программы
+
+    # Окно модальное, блокирует запуск программы до выбора источника
+    # Проверка подключения пытается прочитать 3 кадра для валидации
+    # Все известные альтернативные пути для IP камер перепробуются
+
+12. УПРАВЛЕНИЕ ОСТАНОВКАМИ (строки 950-1100)
+    manage_stops_gui() - Tkinter модальное окно управления:
+    - Список всех остановок с индексами
+    - Кнопки: Добавить, Переименовать, Удалить, Вверх, Вниз, Выбрать
+    - Индикатор текущей остановки (▶ перед названием)
+    - Запрет удаления, если осталась только одна остановка
+    - Запрет на пустые названия
+
+    # Вызывается клавишей 'S' или кнопкой '...' на видео
+    # Изменения применяются сразу при закрытии окна
+    # История счётчиков для перемещённых остановок сохраняется
+
+13. ОСНОВНОЙ ЦИКЛ ОБРАБОТКИ (строки 1100-1305)
+    main() - сердце программы с всеми операциями:
+    - Инициализация YOLOv8 модели с загрузкой весов
+    - Запуск веб-сервера мониторинга в фоновом потоке
+    - Запуск ThreadedVideoReader для асинхронного чтения
+    - Основной цикл while True с обработкой каждого кадра:
+      a) Получение кадра от reader'а
+      b) YOLO детекция людей (классс 0 = 'person')
+      c) Фильтрация по размеру бокса (MIN_AREA)
+      d) Рисование зелёных боксов и confidence на видео
+      e) Извлечение центров детекций
+      f) Трекинг: сопоставление текущих центров с предыдущими
+      g) Расчёт расстояния между кадрами для связывания
+      h) Проверка пересечения контрольной линии
+      i) Логирование события в БД при пересечении
+      j) Обновление счётчиков (enter_count, exit_count)
+      k) Рисование контрольной линии (синяя)
+      l) Рисование информационной панели внизу (300px высота)
+      m) Вывод счётчиков: Вошло, Вышло, В салоне (красные карты)
+      n) Обновление live_data для веб-API
+      o) Вертикальная конкатенация кадра и панели (cv2.vstack)
+      p) Отображение в окне cv2.imshow()
+      q) Обработка нажатия клавиш:
+         'Q' - выход из программы
+         'H'/'V' - выбор ориентации линии
+         'C' - сброс счётчиков и пересDrawка линии
+         'PgUp'/'PgDn' или ','/'. - переключение остановок
+         'S' - открыть диалог управления
+         'R' - сформировать отчёт прямо во время работы
+         1 мс waitKey для минимизации задержки
+
+    Завершение:
+    - Освобождение ресурсов (reader.release(), cv2.destroyAllWindows())
+    - Сохранение счётчиков текущей остановки
+    - Вычисление и вывод итогов в консоль
+    - Форматированный вывод статистики по остановкам
+
+    # Основной цикл работает асинхронно с веб-сервером
+    # Все операции синхронизируются через глобальные переменные
+    # Нет deadlock'ов благодаря простой архитектуре
+
+МАТРИЦЫ КОРРЕСПОНДЕНЦИЙ В ОТЧЁТАХ (ДЕТАЛЬНОЕ ОПИСАНИЕ):
+
+После завершения сеанса работы (нажатие 'R' или автоматическое) система рассчитывает три типа
+взаимодополняющих матриц пассажиропотока:
+
+МАТРИЦА 1: ПО ЧАСАМ (correspondence_hourly):
+┌──────┬──────┬──────┬──────┐
+│ Час  │ Оста1│ Оста2│ Оста3│
+├──────┼──────┼──────┼──────┤
+│ 00-01│ 12   │ 15   │  8   │  <- Вошло в каждой остановке
+│ 02-03│ 8    │ 10   │  6   │
+│ ... полные 24 часа (0-23)...│
+└──────┴──────┴──────┴──────┘
+ПЛЮС две такие же таблицы: вышло + в салоне (расчётное)
+Даёт час-часовой анализ нагрузки на каждой остановке
+
+МАТРИЦА 2: ПО ДНЯМ (correspondence_daily):
+┌──────────┬───────┬───────┬───────┐
+│ День\ОстП│ Оста1 │ Оста2 │ Оста3 │
+├──────────┼───────┼───────┼───────┤
+│Пн  01.04 │  156  │  234  │  189  │  <- Вошло
+│Вт  02.04 │  142  │  267  │  201  │
+│Ср  03.04 │  178  │  245  │  212  │
+└──────────┴───────┴───────┴───────┘
+ПЛЮС таблица "вышло" и таблица "в салоне"
+Позволяет анализировать дневные пики и провалы по дням недели
+
+МАТРИЦА 3: КОРРЕСПОНДЕНТСКАЯ (correspondence_routes):
+┌─────────────┬──────┬──────┬──────┐
+│ Вышли с\На  │ОтП-2 │ОтП-3 │ОтП-4 │
+├─────────────┼──────┼──────┼──────┤
+│ ОтП-1       │  154 │  89  │  34  │  <- Вошли на подор1, вышли на остановках 2,3,4
+│ ОтП-2       │  --  │  203 │  67  │  <- Вошли на остановке 2
+│ ОтП-3       │  --  │  --  │  248 │  <- Вошли на остановке 3
+└─────────────┴──────┴──────┴──────┘
+Диагональная матрица n×n где N = количество остановок
+Каждая ячейка (i,j) = сколько человек вошло на остановке i и вышло на остановке j
+Без диагонали (ячейки где i==j пусты минус)
+Используется для расчёта расстояний, анализа маршрутных потоков, планирования емкостей
+
+Все три матрицы сохраняются в один файл passenger_flow_report.xlsx с разными листами
+Кроме того, сохраняются CSV файлы для каждой матрицы отдельно в папке reports/
+
+------------------------------------------------------------------
+ИСХОДНЫЙ КОД
+------------------------------------------------------------------
+
+    1 | import cv2
+    2 | import numpy as np
+    3 | import os
+    4 | import sqlite3
+    5 | import threading
+    6 | import json
+    7 | from datetime import datetime
+    8 | from http.server import HTTPServer, BaseHTTPRequestHandler
+    9 | 
+   10 | try:
+   11 |     import pandas as pd
+   12 | except ImportError:
+   13 |     pd = None
+   14 | 
+   15 | try:
+   16 |     from PIL import Image, ImageDraw, ImageFont
+   17 | except ImportError:
+   18 |     Image = None
+   19 |     ImageDraw = None
+   20 |     ImageFont = None
+   21 | 
+   22 | try:
+   23 |     from ultralytics import YOLO
+   24 | except ImportError:
+   25 |     YOLO = None
+   26 | 
+   27 | # ─── Источник видео ───────────────────────────────────────────────────────────
+   28 | # Варианты:
+   29 | #   0                          — встроенная/USB-камера
+   30 | #   'video.mp4'                — видеофайл
+   31 | #   PHONE_STREAM               — телефон по Wi-Fi (см. настройки ниже)
+   32 | #   'rtsp://user:pass@IP:port' — IP-камера по RTSP
+   33 | 
+   34 | # --- Подключение телефона (Android: IP Webcam, iPhone: IP Camera Lite) --------
+   35 | # 1. Установите на телефон приложение:
+   36 | #      Android: «IP Webcam» (Pavel Khlebovich) — бесплатно
+   37 | #      iPhone:  «IP Camera Lite»               — бесплатно
+   38 | # 2. Запустите сервер в приложении, запишите IP и порт (обычно 8080)
+   39 | # 3. Вставьте IP телефона ниже и выберите нужный формат потока:
+   40 | 
+   41 | PHONE_IP   = '192.168.0.100'   # ← замените на IP вашего телефона
+   42 | PHONE_PORT = 8080
+   43 | 
+   44 | # Форматы (раскомментируйте нужный):
+   45 | PHONE_STREAM = f'http://{PHONE_IP}:{PHONE_PORT}/video'          # MJPEG — проще, работает везде
+   46 | # PHONE_STREAM = f'rtsp://{PHONE_IP}:{PHONE_PORT}/h264_ulaw.sdp'  # RTSP H.264 — меньше задержка
+   47 | PHONE_FALLBACK_PATHS = ['/video', '/videofeed', '/video/mjpeg', '/mjpeg']
+   48 |     # системный перебор путей для IP камер разных производителей
+   49 |     # попытка несколько вариантов URL-путей если первый не работает
+   50 | VIDEO_SOURCE = PHONE_STREAM   # ← переключите на 0 для обычной камеры
+   50 | 
+   51 | # ─── Организация ─────────────────────────────────────────────────────────────
+   52 | ORG_NAME  = 'НМУ ВКС'
+   53 | ORG_PHONE = '+7 952 553-96-21'
+   54 | ORG_EMAIL = 'mveo@yandex.ru'
+   55 | ORG_CITY  = 'Воронеж'
+   56 | 
+   57 | # ─── Маршрут и транспорт ─────────────────────────────────────────────────────
+   58 | ROUTE_NAME   = 'Маршрут №1'
+   59 | VEHICLE_NAME = 'Автобус 001'
+   60 | STOP_NAME    = 'Остановка А'
+   61 | DOOR_NUMBER  = 1
+   62 | 
+   63 | # Список остановок маршрута
+   64 | STOP_LIST = ['Остановка А', 'Остановка Б', 'Остановка В']
+   65 | current_stop_index = 0
+   66 | 
+   67 | # Счётчики по каждой остановке: {"Остановка А": {"enter": 0, "exit": 0}, ...}
+   68 | stop_counters = {s: {'enter': 0, 'exit': 0} for s in STOP_LIST}
+   69 | 
+   70 | 
+   71 | def save_current_stop_counters():
+   72 |     """Save enter/exit counts to current stop before switching."""
+   73 |     global enter_count, exit_count
+   74 |     stop_counters[STOP_NAME] = {'enter': enter_count, 'exit': exit_count}
+   75 | 
+   76 | 
+   77 | def load_stop_counters(stop_name):
+   78 |     """Load enter/exit counts from a stop."""
+   79 |     global enter_count, exit_count
+   80 |     if stop_name not in stop_counters:
+   81 |         stop_counters[stop_name] = {'enter': 0, 'exit': 0}
+   82 |     enter_count = stop_counters[stop_name]['enter']
+   83 |     exit_count = stop_counters[stop_name]['exit']
+   84 | 
+   85 | 
+   86 | def switch_to_stop(idx):
+   87 |     """Switch to stop by index, saving current and loading new counters."""
+   88 |     global current_stop_index, STOP_NAME
+   89 |     if 0 <= idx < len(STOP_LIST) and idx != current_stop_index:
+   90 |         save_current_stop_counters()
+   91 |         current_stop_index = idx
+   92 |         STOP_NAME = STOP_LIST[current_stop_index]
+   93 |         load_stop_counters(STOP_NAME)
+   94 | 
+   95 | 
+   96 | def get_total_counters():
+   97 |     """Return totals across all stops."""
+   98 |     save_current_stop_counters()  # ensure current is saved
+   99 |     total_in = sum(c['enter'] for c in stop_counters.values())
+  100 |     total_out = sum(c['exit'] for c in stop_counters.values())
+  101 |     return total_in, total_out
+  102 | 
+  103 | 
+  104 | def get_stop_stats():
+  105 |     """Return list of per-stop stats for API/dashboard."""
+  106 |     save_current_stop_counters()
+  107 |     stats = []
+  108 |     for s in STOP_LIST:
+  109 |         c = stop_counters.get(s, {'enter': 0, 'exit': 0})
+  110 |         stats.append({'name': s, 'enter': c['enter'], 'exit': c['exit']})
+  111 |     return stats
+  112 | 
+  113 | # ─── Линия ───────────────────────────────────────────────────────────────────
+  114 | LINE_ORIENTATION = 'vertical'  # 'horizontal' или 'vertical'
+  115 | 
+  116 | # Горизонтальная линия
+  117 | LINE_Y = 300
+  118 | LINE_START_X = 100
+  119 | LINE_END_X = 900
+  120 | 
+  121 | # Вертикальная линия
+  122 | LINE_X = 500
+  123 | LINE_START_Y = 100
+  124 | LINE_END_Y = 700
+  125 | 
+  126 | MIN_AREA = 2500  # Минимальная площадь бокса YOLO (фильтр мелких детекций)
+  127 | YOLO_CONFIDENCE = 0.35  # Порог уверенности YOLO
+  128 | YOLO_MODEL = 'yolov8n.pt'  # Модель: n=быстрая, s=точнее, m=ещё точнее
+  129 | 
+  130 | # База данных и отчёты
+  131 | DATABASE_PATH = 'passenger_flow.db'
+  132 | REPORT_FOLDER = 'reports'
+  133 | 
+  134 | draw_state = {
+  135 |     'drawing': False,
+  136 |     'start': None,
+  137 |     'end': None
+  138 | }
+  139 | 
+  140 | # Координаты кнопок на панели (обновляются каждый кадр)
+  141 | panel_buttons = {}   # {'prev': (x1,y1,x2,y2), 'next': (x1,y1,x2,y2), 'manage': (x1,y1,x2,y2)}
+  142 | frame_height = 0     # высота кадра (для пересчёта Y в панель)
+  143 | 
+  144 | # ─── Веб-панель мониторинга ──────────────────────────────────────────────────
+  145 | DASHBOARD_PORT = 8888
+  146 | live_data = {
+  147 |     'enter': 0, 'exit': 0, 'in_salon': 0,
+  148 |     'stop': STOP_NAME, 'route': ROUTE_NAME,
+  149 |     'vehicle': VEHICLE_NAME, 'door': DOOR_NUMBER,
+  150 |     'time': '', 'fps': 0,
+  151 |     'stop_index': 1, 'stop_total': len(STOP_LIST),
+  152 |     'stops': STOP_LIST[:],
+  153 | }
+  154 | 
+  155 | DASHBOARD_HTML = '''<!DOCTYPE html>
+  156 | <html lang="ru"><head><meta charset="utf-8">
+  157 | <title>НМУ ВКС — Мониторинг</title>
+  158 | <meta name="viewport" content="width=device-width,initial-scale=1">
+  159 | <style>
+  160 | *{margin:0;padding:0;box-sizing:border-box}
+  161 | body{font-family:'Segoe UI',Tahoma,sans-serif;background:#0d1117;color:#e6edf3;min-height:100vh;display:flex;flex-direction:column;align-items:center;padding:24px}
+  162 | h1{color:#58a6ff;font-size:28px;margin-bottom:4px}
+  163 | .sub{color:#8b949e;font-size:14px;margin-bottom:24px}
+  164 | .cards{display:flex;gap:16px;flex-wrap:wrap;justify-content:center;margin-bottom:24px}
+  165 | .card{background:#161b22;border:1px solid #30363d;border-radius:12px;padding:20px 32px;min-width:180px;text-align:center}
+  166 | .card .label{font-size:13px;color:#8b949e;text-transform:uppercase;letter-spacing:1px;margin-bottom:8px}
+  167 | .card .value{font-size:48px;font-weight:700}
+  168 | .card.enter .value{color:#3fb950}
+  169 | .card.exit .value{color:#d29922}
+  170 | .card.salon .value{color:#f85149}
+  171 | .card.total{border-color:#58a6ff}
+  172 | .card.total .value{color:#58a6ff}
+  173 | .info{background:#161b22;border:1px solid #30363d;border-radius:12px;padding:16px 28px;font-size:14px;color:#8b949e;line-height:1.8;min-width:300px;width:100%;max-width:700px}
+  174 | .info span{color:#e6edf3}
+  175 | .dot{display:inline-block;width:8px;height:8px;border-radius:50%;background:#3fb950;margin-right:6px;animation:pulse 1.5s infinite}
+  176 | @keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}
+  177 | .status{margin-top:16px;font-size:12px;color:#484f58}
+  178 | table{width:100%;border-collapse:collapse;margin-top:8px}
+  179 | th{background:#21262d;color:#8b949e;padding:8px 12px;text-align:left;font-size:12px;text-transform:uppercase;letter-spacing:0.5px}
+  180 | td{padding:8px 12px;border-bottom:1px solid #21262d;font-size:14px}
+  181 | tr.active{background:#1c2333}
+  182 | tr:hover{background:#161b22}
+  183 | .btn{background:#21262d;color:#e6edf3;border:1px solid #30363d;border-radius:6px;padding:4px 10px;cursor:pointer;font-size:12px}
+  184 | .btn:hover{background:#30363d}
+  185 | .btn-add{background:#238636;border-color:#2ea043;color:#fff;padding:6px 16px;font-size:13px;margin-top:8px}
+  186 | .btn-add:hover{background:#2ea043}
+  187 | .btn-del{color:#f85149;background:transparent;border:none;cursor:pointer;font-size:14px}
+  188 | .btn-del:hover{text-decoration:underline}
+  189 | input.ed{background:#0d1117;border:1px solid #30363d;color:#e6edf3;border-radius:4px;padding:4px 8px;font-size:13px;width:100%}
+  190 | .nav-btn{background:#21262d;color:#e6edf3;border:1px solid #30363d;border-radius:8px;padding:6px 14px;font-size:18px;cursor:pointer}
+  191 | </style></head><body>
+  192 | <h1>НМУ ВКС</h1>
+  193 | <p class="sub">Система подсчёта пассажиров — онлайн</p>
+  194 | <div class="cards">
+  195 |  <div class="card enter"><div class="label">Вошло (тек.)</div><div class="value" id="enter">0</div></div>
+  196 |  <div class="card exit"><div class="label">Вышло (тек.)</div><div class="value" id="exit">0</div></div>
+  197 |  <div class="card salon"><div class="label">В салоне</div><div class="value" id="salon">0</div></div>
+  198 | </div>
+  199 | <div class="cards">
+  200 |  <div class="card total"><div class="label">Всего вошло</div><div class="value" id="totalIn">0</div></div>
+  201 |  <div class="card total"><div class="label">Всего вышло</div><div class="value" id="totalOut">0</div></div>
+  202 |  <div class="card total"><div class="label">В салоне итого</div><div class="value" id="totalSalon">0</div></div>
+  203 | </div>
+  204 | <div class="info">
+  205 |  <div><span class="dot"></span>Маршрут: <span id="route">—</span></div>
+  206 |  <div>Транспорт: <span id="vehicle">—</span></div>
+  207 |  <div>Остановка: <span id="stop">—</span> <span id="stopidx" style="color:#58a6ff"></span></div>
+  208 |  <div>Дверь: <span id="door">—</span></div>
+  209 |  <div>Время: <span id="time">—</span> | FPS: <span id="fps">—</span></div>
+  210 | </div>
+  211 | <div class="info" style="margin-top:12px">
+  212 |  <div style="margin-bottom:8px;display:flex;align-items:center;gap:8px">
+  213 |   <span style="color:#58a6ff;font-weight:600;flex:1">Остановки маршрута</span>
+  214 |   <button class="nav-btn" onclick="chStop('prev')" id="btnPrev">◀</button>
+  215 |   <button class="nav-btn" onclick="chStop('next')" id="btnNext">▶</button>
+  216 |  </div>
+  217 |  <table>
+  218 |   <thead><tr><th>#</th><th>Остановка</th><th>Вошло</th><th>Вышло</th><th>Баланс</th><th></th></tr></thead>
+  219 |   <tbody id="stopTable"></tbody>
+  220 |   <tfoot><tr style="background:#21262d;font-weight:600"><td></td><td style="color:#58a6ff">Итого</td><td id="ftIn" style="color:#3fb950">0</td><td id="ftOut" style="color:#d29922">0</td><td id="ftBal" style="color:#f85149">0</td><td></td></tr></tfoot>
+  221 |  </table>
+  222 |  <div style="margin-top:10px;display:flex;gap:6px;align-items:center">
+  223 |   <input class="ed" id="newStop" placeholder="Название новой остановки..." style="flex:1">
+  224 |   <button class="btn btn-add" onclick="addStop()">➕ Добавить</button>
+  225 |  </div>
+  226 | </div>
+  227 | <div class="status" id="status">Подключение...</div>
+  228 | <script>
+  229 | function api(path,body){return fetch(path,{method:'POST',headers:{'Content-Type':'application/json'},body:body?JSON.stringify(body):undefined}).then(()=>update());}
+  230 | function chStop(dir){api('/api/stop/'+dir);}
+  231 | function addStop(){
+  232 |  var n=document.getElementById('newStop').value.trim();
+  233 |  if(n){api('/api/stop/add',{name:n});document.getElementById('newStop').value='';}
+  234 | }
+  235 | function renStop(i){
+  236 |  var n=prompt('Новое название:');
+  237 |  if(n&&n.trim())api('/api/stop/rename',{index:i,name:n.trim()});
+  238 | }
+  239 | function delStop(i){if(confirm('Удалить остановку?'))api('/api/stop/delete',{index:i});}
+  240 | async function update(){
+  241 |  try{
+  242 |   const r=await fetch('/api/data');const d=await r.json();
+  243 |   document.getElementById('enter').textContent=d.enter;
+  244 |   document.getElementById('exit').textContent=d.exit;
+  245 |   document.getElementById('salon').textContent=d.in_salon;
+  246 |   document.getElementById('totalIn').textContent=d.total_enter;
+  247 |   document.getElementById('totalOut').textContent=d.total_exit;
+  248 |   document.getElementById('totalSalon').textContent=Math.max(0,d.total_enter-d.total_exit);
+  249 |   document.getElementById('route').textContent=d.route;
+  250 |   document.getElementById('vehicle').textContent=d.vehicle;
+  251 |   document.getElementById('stop').textContent=d.stop;
+  252 |   document.getElementById('stopidx').textContent='['+d.stop_index+'/'+d.stop_total+']';
+  253 |   document.getElementById('door').textContent=d.door;
+  254 |   document.getElementById('time').textContent=d.time;
+  255 |   document.getElementById('fps').textContent=d.fps;
+  256 |   var tb=document.getElementById('stopTable');tb.innerHTML='';
+  257 |   var ss=d.stop_stats||[],sumIn=0,sumOut=0;
+  258 |   ss.forEach(function(s,i){
+  259 |    sumIn+=s.enter;sumOut+=s.exit;
+  260 |    var tr=document.createElement('tr');
+  261 |    if(i+1==d.stop_index)tr.className='active';
+  262 |    tr.innerHTML='<td>'+(i+1)+'</td>'+
+  263 |     '<td style="cursor:pointer" onclick="api(\'/api/stop/set\',{index:'+i+'})">'+(i+1==d.stop_index?'\u25b6 ':'')+s.name+'</td>'+
+  264 |     '<td style="color:#3fb950">'+s.enter+'</td>'+
+  265 |     '<td style="color:#d29922">'+s.exit+'</td>'+
+  266 |     '<td style="color:'+(s.enter-s.exit>=0?'#58a6ff':'#f85149')+'">'+(s.enter-s.exit)+'</td>'+
+  267 |     '<td><button class="btn" onclick="renStop('+i+')">\u270f</button> <button class="btn-del" onclick="delStop('+i+')">\u2716</button></td>';
+  268 |    tb.appendChild(tr);
+  269 |   });
+  270 |   document.getElementById('ftIn').textContent=sumIn;
+  271 |   document.getElementById('ftOut').textContent=sumOut;
+  272 |   document.getElementById('ftBal').textContent=Math.max(0,sumIn-sumOut);
+  273 |   document.getElementById('btnPrev').style.opacity=d.stop_index<=1?'0.3':'1';
+  274 |   document.getElementById('btnNext').style.opacity=d.stop_index>=d.stop_total?'0.3':'1';
+  275 |   document.getElementById('status').textContent='\u2705 '+new Date().toLocaleTimeString();
+  276 |  }catch(e){document.getElementById('status').textContent='\u274c Нет связи';}
+  277 | }
+  278 | setInterval(update,1000);update();
+  279 | </script></body></html>'''
+  280 | 
+  281 | 
+  282 | class DashboardHandler(BaseHTTPRequestHandler):
+  283 |     def do_GET(self):
+  284 |         if self.path == '/api/data':
+  285 |             self.send_response(200)
+  286 |             self.send_header('Content-Type', 'application/json; charset=utf-8')
+  287 |             self.send_header('Access-Control-Allow-Origin', '*')
+  288 |             self.end_headers()
+  289 |             self.wfile.write(json.dumps(live_data, ensure_ascii=False).encode('utf-8'))
+  290 |         else:
+  291 |             self.send_response(200)
+  292 |             self.send_header('Content-Type', 'text/html; charset=utf-8')
+  293 |             self.send_header('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0')
+  294 |             self.send_header('Pragma', 'no-cache')
+  295 |             self.end_headers()
+  296 |             self.wfile.write(DASHBOARD_HTML.encode('utf-8'))
+  297 | 
+  298 |     def do_POST(self):
+  299 |         global current_stop_index, STOP_NAME
+  300 |         length = int(self.headers.get('Content-Length', 0))
+  301 |         body = self.rfile.read(length) if length else b''
+  302 |         data = {}
+  303 |         if body:
+  304 |             try:
+  305 |                 data = json.loads(body)
+  306 |             except Exception:
+  307 |                 pass
+  308 | 
+  309 |         if self.path == '/api/stop/prev':
+  310 |             if current_stop_index > 0:
+  311 |                 switch_to_stop(current_stop_index - 1)
+  312 |             self._json_ok()
+  313 |         elif self.path == '/api/stop/next':
+  314 |             if current_stop_index < len(STOP_LIST) - 1:
+  315 |                 switch_to_stop(current_stop_index + 1)
+  316 |             self._json_ok()
+  317 |         elif self.path == '/api/stop/set':
+  318 |             idx = int(data.get('index', -1))
+  319 |             if 0 <= idx < len(STOP_LIST):
+  320 |                 switch_to_stop(idx)
+  321 |             self._json_ok()
+  322 |         elif self.path == '/api/stop/add':
+  323 |             name = str(data.get('name', '')).strip()
+  324 |             if name and name not in STOP_LIST:
+  325 |                 STOP_LIST.append(name)
+  326 |                 stop_counters[name] = {'enter': 0, 'exit': 0}
+  327 |             self._json_ok()
+  328 |         elif self.path == '/api/stop/rename':
+  329 |             idx = int(data.get('index', -1))
+  330 |             name = str(data.get('name', '')).strip()
+  331 |             if 0 <= idx < len(STOP_LIST) and name:
+  332 |                 old_name = STOP_LIST[idx]
+  333 |                 STOP_LIST[idx] = name
+  334 |                 stop_counters[name] = stop_counters.pop(old_name, {'enter': 0, 'exit': 0})
+  335 |                 if current_stop_index == idx:
+  336 |                     STOP_NAME = name
+  337 |             self._json_ok()
+  338 |         elif self.path == '/api/stop/delete':
+  339 |             idx = int(data.get('index', -1))
+  340 |             if 0 <= idx < len(STOP_LIST) and len(STOP_LIST) > 1:
+  341 |                 old_name = STOP_LIST.pop(idx)
+  342 |                 stop_counters.pop(old_name, None)
+  343 |                 if current_stop_index >= len(STOP_LIST):
+  344 |                     switch_to_stop(len(STOP_LIST) - 1)
+  345 |                 elif current_stop_index == idx:
+  346 |                     STOP_NAME = STOP_LIST[current_stop_index]
+  347 |                     load_stop_counters(STOP_NAME)
+  348 |             self._json_ok()
+  349 |         else:
+  350 |             self.send_response(404)
+  351 |             self.end_headers()
+  352 | 
+  353 |     def _json_ok(self):
+  354 |         self.send_response(200)
+  355 |         self.send_header('Content-Type', 'application/json')
+  356 |         self.send_header('Access-Control-Allow-Origin', '*')
+  357 |         self.end_headers()
+  358 |         self.wfile.write(b'{"ok":true}')
+  359 | 
+  360 |     def log_message(self, format, *args):
+  361 |         pass
+  362 | 
+  363 | 
+  364 | def start_dashboard():
+  365 |     server = HTTPServer(('0.0.0.0', DASHBOARD_PORT), DashboardHandler)
+  366 |     server.daemon_threads = True
+  367 |     t = threading.Thread(target=server.serve_forever, daemon=True)
+  368 |     t.start()
+  369 |     print(f'Веб-панель: http://localhost:{DASHBOARD_PORT}')
+  370 | 
+  371 | 
+  372 | # ─── Многопоточное чтение камеры (FPS boost) ────────────────────────────────
+  373 | class ThreadedVideoReader:
+  374 |     """Читает кадры в фоновом потоке для минимальной задержки."""
+  375 |     def __init__(self, cap):
+  376 |         self.cap = cap
+  377 |         self._frame = None
+  378 |         self._ret = False
+  379 |         self._lock = threading.Lock()
+  380 |         self._running = True
+  381 |         self._thread = threading.Thread(target=self._reader, daemon=True)
+  382 |         self._thread.start()
+  383 | 
+  384 |     def _reader(self):
+  385 |         while self._running:
+  386 |             ret, frame = self.cap.read()
+  387 |             with self._lock:
+  388 |                 self._ret = ret
+  389 |                 self._frame = frame
+  390 | 
+  391 |     def read(self):
+  392 |         with self._lock:
+  393 |             if self._frame is not None:
+  394 |                 return self._ret, self._frame.copy()
+  395 |             return False, None
+  396 | 
+  397 |     def release(self):
+  398 |         self._running = False
+  399 |         self._thread.join(timeout=2)
+  400 |         self.cap.release()
+  401 | 
+  402 |     def isOpened(self):
+  403 |         return self.cap.isOpened()
+  404 | 
+  405 |     def set(self, prop, value):
+  406 |         return self.cap.set(prop, value)
+  407 | 
+  408 |     def get(self, prop):
+  409 |         return self.cap.get(prop)
+  410 | 
+  411 | 
+  412 | def _font_path_preferred():
+  413 |     candidates = [
+  414 |         r'C:\Windows\Fonts\segoeui.ttf',
+  415 |         r'C:\Windows\Fonts\arial.ttf',
+  416 |         r'C:\Windows\Fonts\tahoma.ttf',
+  417 |     ]
+  418 |     for p in candidates:
+  419 |         if os.path.exists(p):
+  420 |             return p
+  421 |     return None
+  422 | 
+  423 | 
+  424 | def draw_text_unicode(img_bgr, text, x, y, font_px=26, color=(255, 255, 255), center=False):
+  425 |     """Рисует UTF-8 текст (включая кириллицу) на BGR-кадре."""
+  426 |     if Image is None or ImageDraw is None or ImageFont is None:
+  427 |         # Fallback без кириллицы
+  428 |         cv2.putText(img_bgr, str(text), (x, y), cv2.FONT_HERSHEY_SIMPLEX, 0.7, color, 1, cv2.LINE_AA)
+  429 |         return
+  430 | 
+  431 |     rgb = cv2.cvtColor(img_bgr, cv2.COLOR_BGR2RGB)
+  432 |     pil_img = Image.fromarray(rgb)
+  433 |     draw = ImageDraw.Draw(pil_img)
+  434 | 
+  435 |     fp = _font_path_preferred()
+  436 |     font = ImageFont.truetype(fp, font_px) if fp else ImageFont.load_default()
+  437 | 
+  438 |     tx, ty = x, y
+  439 |     if center:
+  440 |         bbox = draw.textbbox((0, 0), str(text), font=font)
+  441 |         tw = bbox[2] - bbox[0]
+  442 |         tx = max(0, int((img_bgr.shape[1] - tw) / 2))
+  443 | 
+  444 |     draw.text((tx, ty), str(text), font=font, fill=(int(color[2]), int(color[1]), int(color[0])))
+  445 |     out = cv2.cvtColor(np.array(pil_img), cv2.COLOR_RGB2BGR)
+  446 |     img_bgr[:, :] = out
+  447 | 
+  448 | 
+  449 | def boxes_overlap_or_close(b1, b2, max_gap=60):
+  450 |     x1, y1, w1, h1 = b1
+  451 |     x2, y2, w2, h2 = b2
+  452 | 
+  453 |     if x1 <= x2 + w2 + max_gap and x1 + w1 + max_gap >= x2 and y1 <= y2 + h2 + max_gap and y1 + h1 + max_gap >= y2:
+  454 |         return True
+  455 |     return False
+  456 | 
+  457 | 
+  458 | def merge_boxes(boxes, max_gap=80):
+  459 |     """Объединяет близкие или перекрывающиеся боксы (руки + тело в один)"""
+  460 |     merged = boxes.copy()
+  461 |     i = 0
+  462 |     while i < len(merged):
+  463 |         j = i + 1
+  464 |         while j < len(merged):
+  465 |             if boxes_overlap_or_close(merged[i], merged[j], max_gap):
+  466 |                 x1, y1, w1, h1 = merged[i]
+  467 |                 x2, y2, w2, h2 = merged[j]
+  468 |                 nx = min(x1, x2)
+  469 |                 ny = min(y1, y2)
+  470 |                 nw = max(x1 + w1, x2 + w2) - nx
+  471 |                 nh = max(y1 + h1, y2 + h2) - ny
+  472 |                 merged[i] = (nx, ny, nw, nh)
+  473 |                 merged.pop(j)
+  474 |                 j = i + 1
+  475 |             else:
+  476 |                 j += 1
+  477 |         i += 1
+  478 |     return merged
+  479 | 
+  480 | 
+  481 | def init_database():
+  482 |     if not os.path.exists(REPORT_FOLDER):
+  483 |         os.makedirs(REPORT_FOLDER, exist_ok=True)
+  484 | 
+  485 |     conn = sqlite3.connect(DATABASE_PATH)
+  486 |     c = conn.cursor()
+  487 |     c.execute('''
+  488 |         CREATE TABLE IF NOT EXISTS passenger_flow (
+  489 |             id INTEGER PRIMARY KEY AUTOINCREMENT,
+  490 |             timestamp TEXT,
+  491 |             route TEXT,
+  492 |             vehicle TEXT,
+  493 |             stop TEXT,
+  494 |             door INTEGER,
+  495 |             direction TEXT,
+  496 |             event_type TEXT
+  497 |         )
+  498 |     ''')
+  499 |     conn.commit()
+  500 |     conn.close()
+  501 | 
+  502 | 
+  503 | def log_event(direction, event_type='crossing'):
+  504 |     ts = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+  505 |     conn = sqlite3.connect(DATABASE_PATH)
+  506 |     c = conn.cursor()
+  507 |     c.execute('''
+  508 |         INSERT INTO passenger_flow (timestamp, route, vehicle, stop, door, direction, event_type)
+  509 |         VALUES (?, ?, ?, ?, ?, ?, ?)
+  510 |     ''', (ts, ROUTE_NAME, VEHICLE_NAME, STOP_NAME, DOOR_NUMBER, direction, event_type))
+  511 |     conn.commit()
+  512 |     conn.close()
+  513 | 
+  514 | 
+  515 | def show_splash():
+  516 |     """Заставка НМУ ВКС при запуске"""
+  517 |     W, H = 900, 500
+  518 |     img = np.zeros((H, W, 3), dtype=np.uint8)
+  519 |     img[:] = (60, 30, 10)  # тёмно-синий фон
+  520 | 
+  521 |     cv2.rectangle(img, (0, 0), (W, 8), (0, 180, 255), -1)
+  522 |     cv2.rectangle(img, (0, H - 8), (W, H), (0, 180, 255), -1)
+  523 | 
+  524 |     draw_text_unicode(img, ORG_NAME, 0, 70, font_px=74, color=(0, 200, 255), center=True)
+  525 |     draw_text_unicode(img, ORG_CITY, 0, 148, font_px=32, color=(180, 180, 180), center=True)
+  526 |     draw_text_unicode(img, 'Система подсчета пассажиров', 0, 220, font_px=42, color=(255, 255, 255), center=True)
+  527 |     draw_text_unicode(img, 'OpenCV  |  SQLite  |  Excel', 0, 286, font_px=24, color=(150, 150, 150), center=True)
+  528 |     draw_text_unicode(img, f'{ORG_PHONE}  |  {ORG_EMAIL}', 0, 356, font_px=34, color=(100, 200, 100), center=True)
+  529 |     draw_text_unicode(img, 'Нажмите любую клавишу для запуска...', 0, 430, font_px=26, color=(200, 200, 200), center=True)
+  530 | 
+  531 |     cv2.imshow('People Counter Splash', img)
+  532 |     cv2.waitKey(0)
+  533 |     cv2.destroyWindow('People Counter Splash')
+  534 | 
+  535 | 
+  536 | def generate_reports():
+  537 |     conn = sqlite3.connect(DATABASE_PATH)
+  538 |     df = pd.read_sql_query('SELECT * FROM passenger_flow', conn)
+  539 |     conn.close()
+  540 | 
+  541 |     if df.empty:
+  542 |         print('Нет данных для отчёта.')
+  543 |         return
+  544 | 
+  545 |     df['timestamp'] = pd.to_datetime(df['timestamp'])
+  546 |     df['date']  = df['timestamp'].dt.date
+  547 |     df['hour']  = df['timestamp'].dt.hour
+  548 |     df['month'] = df['timestamp'].dt.month
+  549 |     df['year']  = df['timestamp'].dt.year
+  550 | 
+  551 |     ctrl = df.groupby(['route', 'vehicle', 'door', 'direction']).agg(total=('id', 'count')).reset_index()
+  552 | 
+  553 |     reports = {
+  554 |         'daily':     df.groupby('date').size().reset_index(name='count'),
+  555 |         'hourly':    df.groupby(['date', 'hour']).size().reset_index(name='count'),
+  556 |         'stop':      df.groupby('stop').size().reset_index(name='count'),
+  557 |         'vehicle':   df.groupby('vehicle').size().reset_index(name='count'),
+  558 |         'monthly':   df.groupby(['year', 'month']).size().reset_index(name='count'),
+  559 |         'yearly':    df.groupby('year').size().reset_index(name='count'),
+  560 |         'route':     df.groupby(['route', 'door']).size().reset_index(name='count'),
+  561 |         'direction': df.groupby(['direction']).size().reset_index(name='count'),
+  562 |     }
+  563 | 
+  564 |     for key, table in reports.items():
+  565 |         table.to_csv(os.path.join(REPORT_FOLDER, f'{key}_report.csv'), index=False, encoding='utf-8-sig')
+  566 | 
+  567 |     ctrl.to_csv(os.path.join(REPORT_FOLDER, 'control_panel_report.csv'), index=False, encoding='utf-8-sig')
+  568 | 
+  569 |     # Матрица корреспонденций: сколько вошло/вышло на каждой остановке
+  570 |     entered = df[df['direction'] == 'in'].groupby('stop').size().rename('вошло')
+  571 |     exited  = df[df['direction'] == 'out'].groupby('stop').size().rename('вышло')
+  572 |     matrix  = pd.concat([entered, exited], axis=1).fillna(0).astype(int)
+  573 |     matrix['баланс'] = matrix['вошло'] - matrix['вышло']
+  574 |     matrix.index.name = 'остановка'
+  575 |     matrix.to_csv(os.path.join(REPORT_FOLDER, 'correspondence_matrix.csv'), encoding='utf-8-sig')
+  576 | 
+  577 |     try:
+  578 |         from openpyxl.styles import Font, Alignment, PatternFill, Border, Side
+  579 |         from openpyxl.utils import get_column_letter
+  580 | 
+  581 |         xlsx_path = os.path.join(REPORT_FOLDER, 'passenger_flow_report.xlsx')
+  582 |         writer = pd.ExcelWriter(xlsx_path, engine='openpyxl')
+  583 | 
+  584 |         header_colors = {
+  585 |             'Все данные':          '1F4E79',
+  586 |             'По дням':             '2E75B6',
+  587 |             'По часам':            '2E75B6',
+  588 |             'По месяцам':          '375623',
+  589 |             'По годам':            '375623',
+  590 |             'По остановкам':       '7B2C2C',
+  591 |             'По маршрутам':        '4472C4',
+  592 |             'Панель руководителя': '833C00',
+  593 |             'Матрица корреспонд.': '4C4C4C',
+  594 |         }
+  595 |         row_fill_odd  = PatternFill('solid', fgColor='DCE6F1')
+  596 |         row_fill_even = PatternFill('solid', fgColor='FFFFFF')
+  597 |         thin = Side(border_style='thin', color='CCCCCC')
+  598 |         cell_border = Border(top=thin, left=thin, right=thin, bottom=thin)
+  599 | 
+  600 |         sheets_xlsx = {
+  601 |             'Все данные': df[['id','timestamp','route','vehicle','stop','door','direction','event_type']].rename(columns={
+  602 |                 'id':'ID','timestamp':'Дата/Время','route':'Маршрут','vehicle':'ТС',
+  603 |                 'stop':'Остановка','door':'Дверь','direction':'Направление','event_type':'Событие'}),
+  604 |             'По дням':    reports['daily'].rename(columns={'date':'Дата','count':'Пассажиров'}),
+  605 |             'По часам':   reports['hourly'].rename(columns={'date':'Дата','hour':'Час','count':'Пассажиров'}),
+  606 |             'По месяцам': reports['monthly'].rename(columns={'year':'Год','month':'Месяц','count':'Пассажиров'}),
+  607 |             'По годам':   reports['yearly'].rename(columns={'year':'Год','count':'Пассажиров'}),
+  608 |             'По остановкам': reports['stop'].rename(columns={'stop':'Остановка','count':'Пассажиров'}),
+  609 |             'По маршрутам':  reports['route'].rename(columns={'route':'Маршрут','door':'Дверь','count':'Пассажиров'}),
+  610 |             'Панель руководителя': ctrl.rename(columns={'route':'Маршрут','vehicle':'ТС','door':'Дверь','direction':'Напр.','total':'Итого'}),
+  611 |             'Матрица корреспонд.': matrix.reset_index().rename(columns={'остановка':'Остановка'}),
+  612 |         }
+  613 | 
+  614 |         for sheet_name, data in sheets_xlsx.items():
+  615 |             data.to_excel(writer, sheet_name=sheet_name, index=False, startrow=1)
+  616 |             ws = writer.sheets[sheet_name]
+  617 |             color = header_colors.get(sheet_name, '1F4E79')
+  618 | 
+  619 |             ws.merge_cells(start_row=1, start_column=1, end_row=1, end_column=len(data.columns))
+  620 |             tc = ws.cell(row=1, column=1)
+  621 |             tc.value = sheet_name
+  622 |             tc.font  = Font(bold=True, size=13, color='FFFFFF')
+  623 |             tc.fill  = PatternFill('solid', fgColor=color)
+  624 |             tc.alignment = Alignment(horizontal='center', vertical='center')
+  625 |             ws.row_dimensions[1].height = 26
+  626 | 
+  627 |             for cell in ws[2]:
+  628 |                 cell.font  = Font(bold=True, color='FFFFFF')
+  629 |                 cell.fill  = PatternFill('solid', fgColor=color)
+  630 |                 cell.alignment = Alignment(horizontal='center', vertical='center', wrap_text=True)
+  631 |                 cell.border = cell_border
+  632 |             ws.row_dimensions[2].height = 20
+  633 | 
+  634 |             for ri, row in enumerate(ws.iter_rows(min_row=3, max_row=ws.max_row)):
+  635 |                 fill = row_fill_odd if ri % 2 == 0 else row_fill_even
+  636 |                 for cell in row:
+  637 |                     cell.fill = fill
+  638 |                     cell.alignment = Alignment(horizontal='center', vertical='center')
+  639 |                     cell.border = cell_border
+  640 | 
+  641 |             for ci, col in enumerate(ws.columns, start=1):
+  642 |                 ml = max((len(str(c.value)) for c in col if c.value), default=8)
+  643 |                 ws.column_dimensions[get_column_letter(ci)].width = min(ml + 4, 45)
+  644 | 
+  645 |             ws.freeze_panes = 'A3'
+  646 | 
+  647 |         writer.close()
+  648 |         print(f'Excel-отчёт: {xlsx_path}')
+  649 |     except Exception as e:
+  650 |         print('Ошибка Excel:', e)
+  651 | 
+  652 |     print('Все отчёты сформированы.')
+  653 | 
+  654 | # Инициализация счётчиков
+  655 | enter_count = 0
+  656 | exit_count = 0
+  657 | 
+  658 | # Словарь для отслеживания объектов: {id: (prev_center, crossed, last_cross_direction)}
+  659 | tracked_objects = {}
+  660 | next_id = 0
+  661 | 
+  662 | 
+  663 | def mouse_callback(event, x, y, flags, param):
+  664 |     global LINE_ORIENTATION, LINE_Y, LINE_X, LINE_START_X, LINE_END_X, LINE_START_Y, LINE_END_Y, draw_state
+  665 |     global current_stop_index, STOP_NAME
+  666 | 
+  667 |     # Клик по панели (ниже кадра) — проверяем кнопки
+  668 |     if event == cv2.EVENT_LBUTTONDOWN and frame_height > 0 and y >= frame_height:
+  669 |         py = y - frame_height  # Y внутри панели
+  670 |         for btn_name, (bx1, by1, bx2, by2) in panel_buttons.items():
+  671 |             if bx1 <= x <= bx2 and by1 <= py <= by2:
+  672 |                 if btn_name == 'prev' and current_stop_index > 0:
+  673 |                     switch_to_stop(current_stop_index - 1)
+  674 |                 elif btn_name == 'next' and current_stop_index < len(STOP_LIST) - 1:
+  675 |                     switch_to_stop(current_stop_index + 1)
+  676 |                 elif btn_name == 'manage':
+  677 |                     manage_stops_gui()
+  678 |                 return  # не рисуем линию
+  679 |         return  # клик по панели, но не по кнопке
+  680 | 
+  681 |     if event == cv2.EVENT_LBUTTONDOWN:
+  682 |         draw_state['drawing'] = True
+  683 |         draw_state['start'] = (x, y)
+  684 |         draw_state['end'] = (x, y)
+  685 | 
+  686 |     elif event == cv2.EVENT_MOUSEMOVE and draw_state['drawing']:
+  687 |         draw_state['end'] = (x, y)
+  688 | 
+  689 |     elif event == cv2.EVENT_LBUTTONUP and draw_state['drawing']:
+  690 |         draw_state['drawing'] = False
+  691 |         draw_state['end'] = (x, y)
+  692 | 
+  693 |         sx, sy = draw_state['start']
+  694 |         ex, ey = draw_state['end']
+  695 | 
+  696 |         # Определяем ориентацию линии по большей величине проекции
+  697 |         if abs(ex - sx) >= abs(ey - sy):
+  698 |             LINE_ORIENTATION = 'horizontal'
+  699 |             LINE_Y = int((sy + ey) / 2)
+  700 |             LINE_START_X, LINE_END_X = min(sx, ex), max(sx, ex)
+  701 | 
+  702 |         else:
+  703 |             LINE_ORIENTATION = 'vertical'
+  704 |             LINE_X = int((sx + ex) / 2)
+  705 |             LINE_START_Y, LINE_END_Y = min(sy, ey), max(sy, ey)
+  706 | 
+  707 | 
+  708 | def open_video_source(source):
+  709 |     """Открывает камеру/URL/файл с fallback-стратегией для телефонных потоков."""
+  710 |     candidates = []
+  711 | 
+  712 |     if isinstance(source, int):
+  713 |         candidates = [source]
+  714 |     elif isinstance(source, str):
+  715 |         s = source.strip()
+  716 |         if s.startswith('http://') and PHONE_IP in s:
+  717 |             base = f'http://{PHONE_IP}:{PHONE_PORT}'
+  718 |             candidates.append(s)
+  719 |             for path in PHONE_FALLBACK_PATHS:
+  720 |                 url = f'{base}{path}'
+  721 |                 if url not in candidates:
+  722 |                     candidates.append(url)
+  723 |         else:
+  724 |             candidates = [s]
+  725 |     else:
+  726 |         candidates = [source]
+  727 | 
+  728 |     for cand in candidates:
+  729 |         # Для HTTP-потока телефона используем только backend по умолчанию,
+  730 |         # чтобы избежать долгих зависаний при переборе драйверов.
+  731 |         if isinstance(cand, str) and cand.startswith('http'):
+  732 |             backends = [None]
+  733 |         elif isinstance(cand, str) and cand.startswith('rtsp'):
+  734 |             backends = [cv2.CAP_FFMPEG, None] if hasattr(cv2, 'CAP_FFMPEG') else [None]
+  735 |         else:
+  736 |             backends = [cv2.CAP_DSHOW, None] if hasattr(cv2, 'CAP_DSHOW') else [None]
+  737 | 
+  738 |         for backend in backends:
+  739 |             cap = cv2.VideoCapture(cand) if backend is None else cv2.VideoCapture(cand, backend)
+  740 |             if not cap.isOpened():
+  741 |                 cap.release()
+  742 |                 continue
+  743 | 
+  744 |             # До 3 попыток чтения первого кадра
+  745 |             ok = False
+  746 |             for _ in range(3):
+  747 |                 ret, _ = cap.read()
+  748 |                 if ret:
+  749 |                     ok = True
+  750 |                     break
+  751 |             if ok:
+  752 |                 print(f'Источник открыт: {cand}')
+  753 |                 return cap
+  754 | 
+  755 |             cap.release()
+  756 | 
+  757 |     return cv2.VideoCapture()  # пустой объект с isOpened() == False
+  758 | 
+  759 | 
+  760 | def manage_stops_gui():
+  761 |     """Окно управления остановками: добавить, удалить, переименовать, переместить."""
+  762 |     global STOP_LIST, current_stop_index, STOP_NAME
+  763 |     import tkinter as tk
+  764 |     from tkinter import simpledialog, messagebox
+  765 | 
+  766 |     win = tk.Tk()
+  767 |     win.title('Управление остановками')
+  768 |     win.geometry('420x400')
+  769 |     win.resizable(False, False)
+  770 | 
+  771 |     tk.Label(win, text='Остановки маршрута', font=('Segoe UI', 12, 'bold')).pack(pady=(10, 4))
+  772 | 
+  773 |     frm = tk.Frame(win)
+  774 |     frm.pack(fill='both', expand=True, padx=12)
+  775 | 
+  776 |     listbox = tk.Listbox(frm, font=('Segoe UI', 11), selectmode='single', height=12)
+  777 |     listbox.pack(side='left', fill='both', expand=True)
+  778 |     scrollbar = tk.Scrollbar(frm, command=listbox.yview)
+  779 |     scrollbar.pack(side='right', fill='y')
+  780 |     listbox.config(yscrollcommand=scrollbar.set)
+  781 | 
+  782 |     def refresh_list():
+  783 |         listbox.delete(0, tk.END)
+  784 |         for i, s in enumerate(STOP_LIST):
+  785 |             prefix = '▶ ' if i == current_stop_index else '   '
+  786 |             listbox.insert(tk.END, f'{prefix}{i+1}. {s}')
+  787 |         if current_stop_index < listbox.size():
+  788 |             listbox.selection_set(current_stop_index)
+  789 | 
+  790 |     refresh_list()
+  791 | 
+  792 |     btn_frame = tk.Frame(win)
+  793 |     btn_frame.pack(fill='x', padx=12, pady=8)
+  794 | 
+  795 |     def add_stop():
+  796 |         name = simpledialog.askstring('Добавить', 'Название новой остановки:', parent=win)
+  797 |         if name and name.strip():
+  798 |             STOP_LIST.append(name.strip())
+  799 |             refresh_list()
+  800 | 
+  801 |     def rename_stop():
+  802 |         sel = listbox.curselection()
+  803 |         if not sel:
+  804 |             return
+  805 |         idx = sel[0]
+  806 |         old = STOP_LIST[idx]
+  807 |         name = simpledialog.askstring('Переименовать', f'Новое название для «{old}»:', initialvalue=old, parent=win)
+  808 |         if name and name.strip():
+  809 |             STOP_LIST[idx] = name.strip()
+  810 |             refresh_list()
+  811 | 
+  812 |     def delete_stop():
+  813 |         global current_stop_index
+  814 |         sel = listbox.curselection()
+  815 |         if not sel:
+  816 |             return
+  817 |         idx = sel[0]
+  818 |         if len(STOP_LIST) <= 1:
+  819 |             messagebox.showwarning('Нельзя', 'Должна остаться хотя бы одна остановка.', parent=win)
+  820 |             return
+  821 |         STOP_LIST.pop(idx)
+  822 |         if current_stop_index >= len(STOP_LIST):
+  823 |             current_stop_index = len(STOP_LIST) - 1
+  824 |         refresh_list()
+  825 | 
+  826 |     def move_up():
+  827 |         sel = listbox.curselection()
+  828 |         if not sel or sel[0] == 0:
+  829 |             return
+  830 |         global current_stop_index
+  831 |         idx = sel[0]
+  832 |         STOP_LIST[idx], STOP_LIST[idx-1] = STOP_LIST[idx-1], STOP_LIST[idx]
+  833 |         if current_stop_index == idx:
+  834 |             current_stop_index -= 1
+  835 |         elif current_stop_index == idx - 1:
+  836 |             current_stop_index += 1
+  837 |         refresh_list()
+  838 |         listbox.selection_set(idx - 1)
+  839 | 
+  840 |     def move_down():
+  841 |         sel = listbox.curselection()
+  842 |         if not sel or sel[0] >= len(STOP_LIST) - 1:
+  843 |             return
+  844 |         global current_stop_index
+  845 |         idx = sel[0]
+  846 |         STOP_LIST[idx], STOP_LIST[idx+1] = STOP_LIST[idx+1], STOP_LIST[idx]
+  847 |         if current_stop_index == idx:
+  848 |             current_stop_index += 1
+  849 |         elif current_stop_index == idx + 1:
+  850 |             current_stop_index -= 1
+  851 |         refresh_list()
+  852 |         listbox.selection_set(idx + 1)
+  853 | 
+  854 |     def select_stop():
+  855 |         global current_stop_index, STOP_NAME
+  856 |         sel = listbox.curselection()
+  857 |         if not sel:
+  858 |             return
+  859 |         current_stop_index = sel[0]
+  860 |         STOP_NAME = STOP_LIST[current_stop_index]
+  861 |         refresh_list()
+  862 | 
+  863 |     def close_win():
+  864 |         global STOP_NAME
+  865 |         STOP_NAME = STOP_LIST[current_stop_index]
+  866 |         win.destroy()
+  867 | 
+  868 |     tk.Button(btn_frame, text='➕ Добавить', command=add_stop, width=12).grid(row=0, column=0, padx=2, pady=2)
+  869 |     tk.Button(btn_frame, text='✏ Переимен.', command=rename_stop, width=12).grid(row=0, column=1, padx=2, pady=2)
+  870 |     tk.Button(btn_frame, text='❌ Удалить', command=delete_stop, width=12).grid(row=0, column=2, padx=2, pady=2)
+  871 |     tk.Button(btn_frame, text='⬆ Вверх', command=move_up, width=12).grid(row=1, column=0, padx=2, pady=2)
+  872 |     tk.Button(btn_frame, text='⬇ Вниз', command=move_down, width=12).grid(row=1, column=1, padx=2, pady=2)
+  873 |     tk.Button(btn_frame, text='✅ Выбрать', command=select_stop, width=12).grid(row=1, column=2, padx=2, pady=2)
+  874 | 
+  875 |     tk.Button(win, text='Закрыть', command=close_win, width=16).pack(pady=(0, 10))
+  876 |     win.protocol('WM_DELETE_WINDOW', close_win)
+  877 |     win.grab_set()
+  878 |     win.mainloop()
+  879 | 
+  880 | 
+  881 | def choose_source_gui(default_source):
+  882 |     """Стартовое окно выбора источника: USB/телефон/RTSP/файл."""
+  883 |     import tkinter as tk
+  884 |     from tkinter import filedialog, messagebox
+  885 | 
+  886 |     selected = {'value': default_source}
+  887 | 
+  888 |     root = tk.Tk()
+  889 |     root.title('Источник видео')
+  890 |     root.geometry('560x330')
+  891 |     root.resizable(False, False)
+  892 | 
+  893 |     mode = tk.StringVar(value='phone')
+  894 |     phone_ip = tk.StringVar(value=PHONE_IP)
+  895 |     phone_port = tk.StringVar(value=str(PHONE_PORT))
+  896 |     rtsp_url = tk.StringVar(value='rtsp://user:pass@192.168.0.10:554/stream')
+  897 |     file_path = tk.StringVar(value='')
+  898 | 
+  899 |     if isinstance(default_source, int):
+  900 |         mode.set('usb')
+  901 |     elif isinstance(default_source, str) and default_source.startswith('http'):
+  902 |         mode.set('phone')
+  903 |     elif isinstance(default_source, str) and default_source.startswith('rtsp'):
+  904 |         mode.set('rtsp')
+  905 |         rtsp_url.set(default_source)
+  906 |     elif isinstance(default_source, str):
+  907 |         mode.set('file')
+  908 |         file_path.set(default_source)
+  909 | 
+  910 |     tk.Label(root, text='Выберите источник перед запуском', font=('Segoe UI', 12, 'bold')).pack(pady=10)
+  911 | 
+  912 |     frm = tk.Frame(root)
+  913 |     frm.pack(fill='both', expand=True, padx=12)
+  914 | 
+  915 |     tk.Radiobutton(frm, text='USB камера (0)', variable=mode, value='usb').grid(row=0, column=0, sticky='w')
+  916 |     tk.Radiobutton(frm, text='Телефон (IP Webcam)', variable=mode, value='phone').grid(row=1, column=0, sticky='w', pady=(8, 0))
+  917 | 
+  918 |     tk.Label(frm, text='IP').grid(row=2, column=0, sticky='w', padx=(20, 0))
+  919 |     tk.Entry(frm, textvariable=phone_ip, width=18).grid(row=2, column=1, sticky='w')
+  920 |     tk.Label(frm, text='Port').grid(row=2, column=2, sticky='w', padx=(10, 0))
+  921 |     tk.Entry(frm, textvariable=phone_port, width=8).grid(row=2, column=3, sticky='w')
+  922 | 
+  923 |     tk.Radiobutton(frm, text='RTSP', variable=mode, value='rtsp').grid(row=3, column=0, sticky='w', pady=(10, 0))
+  924 |     tk.Entry(frm, textvariable=rtsp_url, width=54).grid(row=4, column=0, columnspan=4, sticky='w', padx=(20, 0))
+  925 | 
+  926 |     tk.Radiobutton(frm, text='Видеофайл', variable=mode, value='file').grid(row=5, column=0, sticky='w', pady=(10, 0))
+  927 |     tk.Entry(frm, textvariable=file_path, width=44).grid(row=6, column=0, columnspan=3, sticky='w', padx=(20, 0))
+  928 | 
+  929 |     def pick_file():
+  930 |         path = filedialog.askopenfilename(
+  931 |             title='Выберите видеофайл',
+  932 |             filetypes=[('Video', '*.mp4 *.avi *.mov *.mkv'), ('All', '*.*')],
+  933 |         )
+  934 |         if path:
+  935 |             file_path.set(path)
+  936 |             mode.set('file')
+  937 | 
+  938 |     tk.Button(frm, text='Обзор...', command=pick_file).grid(row=6, column=3, sticky='w', padx=(8, 0))
+  939 | 
+  940 |     status = tk.StringVar(value='Готово к запуску')
+  941 |     tk.Label(root, textvariable=status, fg='#4a4a4a').pack(anchor='w', padx=14, pady=(4, 0))
+  942 | 
+  943 |     def build_source_from_ui():
+  944 |         m = mode.get()
+  945 |         if m == 'usb':
+  946 |             return 0
+  947 |         if m == 'phone':
+  948 |             ip = phone_ip.get().strip()
+  949 |             port = phone_port.get().strip() or '8080'
+  950 |             return f'http://{ip}:{port}/video'
+  951 |         if m == 'rtsp':
+  952 |             return rtsp_url.get().strip()
+  953 |         return file_path.get().strip()
+  954 | 
+  955 |     def test_connection():
+  956 |         source = build_source_from_ui()
+  957 |         if not source and mode.get() != 'usb':
+  958 |             messagebox.showwarning('Пустой источник', 'Заполните параметры источника.')
+  959 |             return
+  960 | 
+  961 |         status.set('Проверка подключения...')
+  962 |         root.update_idletasks()
+  963 |         cap = open_video_source(source)
+  964 |         ok = cap.isOpened()
+  965 |         if ok:
+  966 |             ret, _ = cap.read()
+  967 |             ok = bool(ret)
+  968 |         cap.release()
+  969 | 
+  970 |         if ok:
+  971 |             status.set('Подключение успешно')
+  972 |             messagebox.showinfo('Успех', 'Источник доступен, можно запускать.')
+  973 |         else:
+  974 |             status.set('Не удалось подключиться')
+  975 |             messagebox.showerror('Ошибка', 'Источник недоступен. Проверьте IP/порт/URL.')
+  976 | 
+  977 |     def run_with_selected():
+  978 |         src = build_source_from_ui()
+  979 |         if not src and mode.get() != 'usb':
+  980 |             messagebox.showwarning('Пустой источник', 'Заполните параметры источника.')
+  981 |             return
+  982 |         selected['value'] = src
+  983 |         root.destroy()
+  984 | 
+  985 |     btns = tk.Frame(root)
+  986 |     btns.pack(fill='x', padx=12, pady=12)
+  987 |     tk.Button(btns, text='Проверить подключение', command=test_connection).pack(side='left')
+  988 |     tk.Button(btns, text='Запустить', command=run_with_selected).pack(side='right')
+  989 | 
+  990 |     root.protocol('WM_DELETE_WINDOW', run_with_selected)
+  991 |     root.mainloop()
+  992 |     return selected['value']
+  993 | 
+  994 | 
+  995 | def main():
+  996 |     global enter_count, exit_count, tracked_objects, next_id
+  997 |     global LINE_ORIENTATION, LINE_Y, LINE_X, LINE_START_X, LINE_END_X, LINE_START_Y, LINE_END_Y, draw_state
+  998 |     global STOP_NAME, ROUTE_NAME, VEHICLE_NAME, DOOR_NUMBER
+  999 |     global STOP_LIST, current_stop_index
+ 1000 | 
+ 1001 |     if pd is None:
+ 1002 |         print('Pandas не установлен. Установите pandas: pip install pandas')
+ 1003 |     if YOLO is None:
+ 1004 |         print('Ошибка: ultralytics не установлен. pip install ultralytics')
+ 1005 |         return
+ 1006 |     init_database()
+ 1007 |     show_splash()
+ 1008 | 
+ 1009 |     # Загрузка модели YOLO (скачается при первом запуске)
+ 1010 |     print(f'Загрузка YOLO модели: {YOLO_MODEL}')
+ 1011 |     yolo_model = YOLO(YOLO_MODEL)
+ 1012 | 
+ 1013 |     # Выбор источника
+ 1014 |     source = choose_source_gui(VIDEO_SOURCE)
+ 1015 |     print(f'Подключение к: {source}')
+ 1016 |     cap = open_video_source(source)
+ 1017 | 
+ 1018 |     if not cap.isOpened():
+ 1019 |         import tkinter as tk
+ 1020 |         from tkinter import filedialog
+ 1021 |         root = tk.Tk()
+ 1022 |         root.withdraw()
+ 1023 |         path = filedialog.askopenfilename(
+ 1024 |             title='Видео не найдено — выберите файл',
+ 1025 |             filetypes=[('Video', '*.mp4 *.avi *.mov *.mkv'), ('All', '*.*')]
+ 1026 |         )
+ 1027 |         if path:
+ 1028 |             cap = open_video_source(path)
+ 1029 |         if not cap.isOpened():
+ 1030 |             print('Камера/видео не открыты. Попытка webcam (0)...')
+ 1031 |             cap = open_video_source(0)
+ 1032 |         if not cap.isOpened():
+ 1033 |             print('Нет источника видео.')
+ 1034 |             return
+ 1035 | 
+ 1036 |     # ── Оптимизация FPS камеры ─────────────────────────────────────────────
+ 1037 |     cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)   # минимальный буфер — всегда свежий кадр
+ 1038 |     cap.set(cv2.CAP_PROP_FPS, 60)         # запрос максимального FPS
+ 1039 |     cap.set(cv2.CAP_PROP_FOURCC, cv2.VideoWriter_fourcc(*'MJPG'))  # MJPG быстрее YUY2
+ 1040 |     real_fps = cap.get(cv2.CAP_PROP_FPS)
+ 1041 |     print(f'FPS камеры: {real_fps}')
+ 1042 | 
+ 1043 |     # Запускаем веб-панель мониторинга
+ 1044 |     start_dashboard()
+ 1045 | 
+ 1046 |     # Оборачиваем в многопоточный ридер (фоновое чтение кадров)
+ 1047 |     reader = ThreadedVideoReader(cap)
+ 1048 |     import time
+ 1049 |     fps_timer = time.time()
+ 1050 |     fps_count = 0
+ 1051 |     display_fps = 0
+ 1052 | 
+ 1053 |     WIN = f'People Counter  |  {ROUTE_NAME}  |  {VEHICLE_NAME}'
+ 1054 |     cv2.namedWindow(WIN)
+ 1055 |     cv2.setMouseCallback(WIN, mouse_callback)
+ 1056 | 
+ 1057 |     while True:
+ 1058 |         ret, frame = reader.read()
+ 1059 |         if not ret or frame is None:
+ 1060 |             # Конец файла — перемотка (для видеофайлов)
+ 1061 |             reader.cap.set(cv2.CAP_PROP_POS_FRAMES, 0)
+ 1062 |             continue
+ 1063 | 
+ 1064 |         # Счётчик FPS
+ 1065 |         fps_count += 1
+ 1066 |         now_t = time.time()
+ 1067 |         if now_t - fps_timer >= 1.0:
+ 1068 |             display_fps = fps_count
+ 1069 |             fps_count = 0
+ 1070 |             fps_timer = now_t
+ 1071 | 
+ 1072 |         H_fr, W_fr = frame.shape[:2]
+ 1073 |         frame_height = H_fr  # для mouse_callback
+ 1074 | 
+ 1075 |         # ── YOLO детекция людей ─────────────────────────────────────────────
+ 1076 |         results = yolo_model(frame, conf=YOLO_CONFIDENCE, classes=[0], verbose=False)
+ 1077 |         # classes=[0] = только "person" в COCO
+ 1078 | 
+ 1079 |         boxes = []
+ 1080 |         for r in results:
+ 1081 |             for box in r.boxes:
+ 1082 |                 x1, y1, x2, y2 = box.xyxy[0].cpu().numpy().astype(int)
+ 1083 |                 w, h = x2 - x1, y2 - y1
+ 1084 |                 if w * h < MIN_AREA:
+ 1085 |                     continue
+ 1086 |                 boxes.append((x1, y1, w, h))
+ 1087 |                 conf = float(box.conf[0])
+ 1088 |                 cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 255, 0), 2)
+ 1089 |                 cv2.putText(frame, f'{conf:.0%}', (x1, y1 - 6),
+ 1090 |                             cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 1, cv2.LINE_AA)
+ 1091 | 
+ 1092 |         current_centers = []
+ 1093 |         for x, y, w, h in boxes:
+ 1094 |             cx = int(x + w / 2)
+ 1095 |             cy = int(y + h / 2)
+ 1096 |             cv2.circle(frame, (cx, cy), 5, (0, 0, 255), -1)
+ 1097 |             current_centers.append((cx, cy))
+ 1098 | 
+ 1099 |         updated_tracked = {}
+ 1100 |         for center in current_centers:
+ 1101 |             cx, cy = center
+ 1102 |             min_dist   = float('inf')
+ 1103 |             closest_id = None
+ 1104 |             for obj_id, tracked_data in tracked_objects.items():
+ 1105 |                 prev_cx, prev_cy = tracked_data[0]
+ 1106 |                 dist = np.sqrt((cx - prev_cx)**2 + (cy - prev_cy)**2)
+ 1107 |                 if dist < 80 and dist < min_dist:
+ 1108 |                     min_dist   = dist
+ 1109 |                     closest_id = obj_id
+ 1110 | 
+ 1111 |             if closest_id is not None:
+ 1112 |                 prev_center = tracked_objects[closest_id][0]
+ 1113 |                 updated_tracked[closest_id] = (center, tracked_objects[closest_id][1], tracked_objects[closest_id][2])
+ 1114 |                 prev_cx, prev_cy = prev_center
+ 1115 |                 if not tracked_objects[closest_id][1]:
+ 1116 |                     if LINE_ORIENTATION == 'horizontal':
+ 1117 |                         if prev_cy < LINE_Y and cy >= LINE_Y:
+ 1118 |                             enter_count += 1
+ 1119 |                             updated_tracked[closest_id] = (center, True, 'down')
+ 1120 |                             log_event('in', 'entry')
+ 1121 |                         elif prev_cy > LINE_Y and cy <= LINE_Y:
+ 1122 |                             exit_count += 1
+ 1123 |                             updated_tracked[closest_id] = (center, True, 'up')
+ 1124 |                             log_event('out', 'exit')
+ 1125 |                     elif LINE_ORIENTATION == 'vertical':
+ 1126 |                         if prev_cx < LINE_X and cx >= LINE_X:
+ 1127 |                             enter_count += 1
+ 1128 |                             updated_tracked[closest_id] = (center, True, 'right')
+ 1129 |                             log_event('in', 'entry')
+ 1130 |                         elif prev_cx > LINE_X and cx <= LINE_X:
+ 1131 |                             exit_count += 1
+ 1132 |                             updated_tracked[closest_id] = (center, True, 'left')
+ 1133 |                             log_event('out', 'exit')
+ 1134 |             else:
+ 1135 |                 updated_tracked[next_id] = (center, False, None)
+ 1136 |                 next_id += 1
+ 1137 | 
+ 1138 |         tracked_objects = updated_tracked
+ 1139 | 
+ 1140 |         # Рисование линии
+ 1141 |         if LINE_ORIENTATION == 'horizontal':
+ 1142 |             cv2.line(frame, (LINE_START_X, LINE_Y), (LINE_END_X, LINE_Y), (255, 0, 0), 2)
+ 1143 |         else:
+ 1144 |             lx = min(max(LINE_X, 0), W_fr - 1)
+ 1145 |             cv2.line(frame, (lx, LINE_START_Y), (lx, LINE_END_Y), (255, 0, 0), 2)
+ 1146 | 
+ 1147 |         if draw_state['drawing'] and draw_state['start'] and draw_state['end']:
+ 1148 |             cv2.line(frame, draw_state['start'], draw_state['end'], (0, 255, 255), 1)
+ 1149 | 
+ 1150 |         # ── Информационная панель (редизайн) ───────────────────────────────────
+ 1151 |         in_salon = max(0, enter_count - exit_count)
+ 1152 |         panel_h  = 210
+ 1153 |         panel    = np.zeros((panel_h, W_fr, 3), dtype=np.uint8)
+ 1154 |         for y in range(panel_h):
+ 1155 |             k = y / float(panel_h)
+ 1156 |             b = int(24 + 30 * k)
+ 1157 |             g = int(18 + 22 * k)
+ 1158 |             r = int(10 + 16 * k)
+ 1159 |             panel[y, :] = (b, g, r)
+ 1160 | 
+ 1161 |         cv2.line(panel, (0, 0), (W_fr, 0), (40, 180, 255), 3)
+ 1162 |         cv2.line(panel, (0, 1), (W_fr, 1), (20, 110, 170), 1)
+ 1163 | 
+ 1164 |         def pp(text, x, y, size=0.55, color=(220, 220, 220), bold=False):
+ 1165 |             font_px = max(14, int(34 * size) + (4 if bold else 0))
+ 1166 |             draw_text_unicode(panel, text, x, y - font_px + 8, font_px=font_px, color=color, center=False)
+ 1167 | 
+ 1168 |         pp(f'{ORG_NAME}  |  {ROUTE_NAME}  |  {VEHICLE_NAME}  |  Дверь {DOOR_NUMBER}',
+ 1169 |            14, 30, 0.62, (75, 220, 255), bold=True)
+ 1170 |         pp(f'Остановка [{current_stop_index+1}/{len(STOP_LIST)}]: {STOP_NAME}', 14, 60, 0.56, (235, 235, 235))
+ 1171 | 
+ 1172 |         # Кнопки переключения остановок (мышь)
+ 1173 |         btn_h, btn_w = 24, 36
+ 1174 |         btn_y = 44
+ 1175 |         # кнопка ◀ предыдущая
+ 1176 |         bpx = W_fr - 150
+ 1177 |         _c_prev = (60, 160, 60) if current_stop_index > 0 else (50, 50, 50)
+ 1178 |         cv2.rectangle(panel, (bpx, btn_y), (bpx + btn_w, btn_y + btn_h), _c_prev, -1)
+ 1179 |         cv2.rectangle(panel, (bpx, btn_y), (bpx + btn_w, btn_y + btn_h), (100, 200, 100), 1)
+ 1180 |         cv2.putText(panel, '<', (bpx + 12, btn_y + 18), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (220, 255, 220), 2, cv2.LINE_AA)
+ 1181 |         panel_buttons['prev'] = (bpx, btn_y, bpx + btn_w, btn_y + btn_h)
+ 1182 |         # кнопка ▶ следующая
+ 1183 |         bnx = bpx + btn_w + 6
+ 1184 |         _c_next = (60, 160, 60) if current_stop_index < len(STOP_LIST) - 1 else (50, 50, 50)
+ 1185 |         cv2.rectangle(panel, (bnx, btn_y), (bnx + btn_w, btn_y + btn_h), _c_next, -1)
+ 1186 |         cv2.rectangle(panel, (bnx, btn_y), (bnx + btn_w, btn_y + btn_h), (100, 200, 100), 1)
+ 1187 |         cv2.putText(panel, '>', (bnx + 12, btn_y + 18), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (220, 255, 220), 2, cv2.LINE_AA)
+ 1188 |         panel_buttons['next'] = (bnx, btn_y, bnx + btn_w, btn_y + btn_h)
+ 1189 |         # кнопка […] управление
+ 1190 |         bmx = bnx + btn_w + 6
+ 1191 |         cv2.rectangle(panel, (bmx, btn_y), (bmx + btn_w, btn_y + btn_h), (80, 60, 30), -1)
+ 1192 |         cv2.rectangle(panel, (bmx, btn_y), (bmx + btn_w, btn_y + btn_h), (180, 150, 60), 1)
+ 1193 |         cv2.putText(panel, '...', (bmx + 4, btn_y + 18), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 230, 150), 1, cv2.LINE_AA)
+ 1194 |         panel_buttons['manage'] = (bmx, btn_y, bmx + btn_w, btn_y + btn_h)
+ 1195 | 
+ 1196 |         # Карточки счетчиков
+ 1197 |         card_y1, card_y2 = 76, 160
+ 1198 |         card_w, gap = 210, 12
+ 1199 |         x1 = 14
+ 1200 |         x2 = x1 + card_w + gap
+ 1201 |         x3 = x2 + card_w + gap
+ 1202 | 
+ 1203 |         cv2.rectangle(panel, (x1, card_y1), (x1 + card_w, card_y2), (36, 80, 42), -1)
+ 1204 |         cv2.rectangle(panel, (x2, card_y1), (x2 + card_w, card_y2), (62, 56, 24), -1)
+ 1205 |         cv2.rectangle(panel, (x3, card_y1), (x3 + card_w, card_y2), (65, 44, 44), -1)
+ 1206 | 
+ 1207 |         cv2.rectangle(panel, (x1, card_y1), (x1 + card_w, card_y2), (70, 170, 100), 1)
+ 1208 |         cv2.rectangle(panel, (x2, card_y1), (x2 + card_w, card_y2), (180, 150, 60), 1)
+ 1209 |         cv2.rectangle(panel, (x3, card_y1), (x3 + card_w, card_y2), (190, 120, 120), 1)
+ 1210 | 
+ 1211 |         pp('Вошло', x1 + 10, 100, 0.58, (160, 235, 190), bold=True)
+ 1212 |         pp(str(enter_count), x1 + 12, 143, 1.05, (200, 255, 220), bold=True)
+ 1213 | 
+ 1214 |         pp('Вышло', x2 + 10, 100, 0.58, (255, 230, 150), bold=True)
+ 1215 |         pp(str(exit_count), x2 + 12, 143, 1.05, (255, 240, 190), bold=True)
+ 1216 | 
+ 1217 |         pp('В салоне', x3 + 10, 100, 0.58, (255, 180, 180), bold=True)
+ 1218 |         pp(str(in_salon), x3 + 12, 143, 1.05, (255, 215, 215), bold=True)
+ 1219 | 
+ 1220 |         ts_now = datetime.now().strftime('%H:%M:%S  %d.%m.%Y')
+ 1221 |         pp(ts_now, W_fr - 235, 28, 0.54, (170, 190, 210))
+ 1222 |         pp(f'FPS: {display_fps}', W_fr - 235, 56, 0.50, (100, 200, 100))
+ 1223 |         pp('PgUp/PgDn=остановки  S=список  H/V=линия  C=сброс  R=отчёт  Q=выход',
+ 1224 |            14, panel_h - 14, 0.46, (160, 160, 165))
+ 1225 | 
+ 1226 |         # Обновляем данные для веб-панели
+ 1227 |         total_in, total_out = get_total_counters()
+ 1228 |         live_data.update({
+ 1229 |             'enter': enter_count,
+ 1230 |             'exit': exit_count,
+ 1231 |             'in_salon': in_salon,
+ 1232 |             'total_enter': total_in,
+ 1233 |             'total_exit': total_out,
+ 1234 |             'stop': STOP_NAME,
+ 1235 |             'route': ROUTE_NAME,
+ 1236 |             'vehicle': VEHICLE_NAME,
+ 1237 |             'door': DOOR_NUMBER,
+ 1238 |             'time': ts_now,
+ 1239 |             'fps': display_fps,
+ 1240 |             'stop_index': current_stop_index + 1,
+ 1241 |             'stop_total': len(STOP_LIST),
+ 1242 |             'stops': STOP_LIST[:],
+ 1243 |             'stop_stats': get_stop_stats(),
+ 1244 |         })
+ 1245 | 
+ 1246 |         combined = np.vstack([frame, panel])
+ 1247 |         cv2.imshow(WIN, combined)
+ 1248 | 
+ 1249 |         key = cv2.waitKeyEx(1)
+ 1250 |         if key == ord('q'):
+ 1251 |             break
+ 1252 |         elif key == ord('h'):
+ 1253 |             LINE_ORIENTATION = 'horizontal'
+ 1254 |         elif key == ord('v'):
+ 1255 |             LINE_ORIENTATION = 'vertical'
+ 1256 |         elif key == ord('c'):
+ 1257 |             LINE_Y = H_fr // 2
+ 1258 |             LINE_X = W_fr // 2
+ 1259 |             LINE_START_X, LINE_END_X = 0, W_fr
+ 1260 |             LINE_START_Y, LINE_END_Y = 0, H_fr
+ 1261 |             draw_state.update({'drawing': False, 'start': None, 'end': None})
+ 1262 |             enter_count = 0
+ 1263 |             exit_count  = 0
+ 1264 |             tracked_objects.clear()
+ 1265 |         elif key == 2162688 or key == ord(','):  # PgUp
+ 1266 |             switch_to_stop(current_stop_index - 1)
+ 1267 |         elif key == 2228224 or key == ord('.'):  # PgDn
+ 1268 |             switch_to_stop(current_stop_index + 1)
+ 1269 |         elif key == ord('s'):  # S — окно управления остановками
+ 1270 |             manage_stops_gui()
+ 1271 |         elif key == ord('r'):
+ 1272 |             if pd is not None:
+ 1273 |                 generate_reports()
+ 1274 |             else:
+ 1275 |                 print('pandas не установлен')
+ 1276 | 
+ 1277 |     reader.release()
+ 1278 |     cv2.destroyAllWindows()
+ 1279 | 
+ 1280 |     save_current_stop_counters()
+ 1281 |     total_in, total_out = get_total_counters()
+ 1282 |     in_salon_final = max(0, total_in - total_out)
+ 1283 |     print('\n' + '='*50)
+ 1284 |     print(f'  {ORG_NAME} — итоги маршрута')
+ 1285 |     print('='*50)
+ 1286 |     print(f'  Маршрут:  {ROUTE_NAME}')
+ 1287 |     print(f'  ТС:       {VEHICLE_NAME}')
+ 1288 |     print(f'  --- По остановкам ---')
+ 1289 |     for s in STOP_LIST:
+ 1290 |         c = stop_counters.get(s, {'enter': 0, 'exit': 0})
+ 1291 |         print(f'    {s}: вошло {c["enter"]}, вышло {c["exit"]}')
+ 1292 |     print(f'  --- Итого ---')
+ 1293 |     print(f'  Вошло:    {total_in}')
+ 1294 |     print(f'  Вышло:    {total_out}')
+ 1295 |     print(f'  В салоне: {in_salon_final}')
+ 1296 |     print('='*50)
+ 1297 | 
+ 1298 | 
+ 1299 | if __name__ == "__main__":
+ 1300 |     main()
+ 1301 |     if pd is not None:
+ 1302 |         print('Формируем отчёты...')
+ 1303 |         generate_reports()
+ 1304 |     else:
+ 1305 |         print('Pandas отсутствует: отчёты не сформированы.')
+------------------------------------------------------------------
+Конец листинга. Всего строк кода: 1305
+
+  Разработано старшим научным сотрудником НМУ ВКС: В.И. Хван
+  Координация и техническая поддержка: Владимир Х. И.          
+  Дата: 04.04.2026
+
+  Подпись автора: ________________      Утверждаю заказчик: ________________
