@@ -13,24 +13,31 @@ class CounterState:
 
 
 class LineCounter:
-    """Track-aware line crossing counter with counting region (inspired by
-    casedone/people-counting LineCounter).  Only counts an ID once."""
+    """Robust line crossing counter.  Tracks min/max signed distance
+    for each track_id — if both sides of the line were observed, the
+    person definitively crossed.  Works even with unstable IDs."""
+
+    CROSS_MARGIN = 5  # noise margin in pixels
 
     def __init__(self, p1: Point, p2: Point, counting_region: int = 120):
         self.p1 = p1
         self.p2 = p2
         self.counting_region = counting_region
         self.state = CounterState()
-        self.previous_side: Dict[int, float] = {}
-        self.initial_side: Dict[int, float] = {}
         self.counted_ids: Set[int] = set()
-        self._track_history: Dict[int, list] = {}
+        # min/max signed distance per track_id: {id: [min_side, max_side]}
+        self._side_range: Dict[int, list] = {}
+        # current side per track_id (for direction)
+        self._last_side: Dict[int, float] = {}
         self._update_line_vectors()
 
     def set_line(self, p1: Point, p2: Point) -> None:
         self.p1 = p1
         self.p2 = p2
         self._update_line_vectors()
+        # Reset ranges — line moved, old ranges are meaningless
+        self._side_range.clear()
+        self._last_side.clear()
 
     def _update_line_vectors(self) -> None:
         """Pre-compute numpy vectors for distance calculations."""
@@ -62,62 +69,42 @@ class LineCounter:
 
         for track in tracks:
             track_id = track["track_id"]
-            # Use bottom-center (feet) if available, otherwise center
             point = track.get("bottom_center", track["center"])
             active_ids.add(track_id)
 
-            # Keep history for smoothing
-            hist = self._track_history.setdefault(track_id, [])
-            hist.append(point)
-            if len(hist) > 30:
-                hist.pop(0)
-
             side = self._signed_distance(point)
-            prev_side = self.previous_side.get(track_id)
-            self.previous_side[track_id] = side
+            self._last_side[track_id] = side
 
             if track_id in self.counted_ids:
                 continue
 
-            # Remember which side the ID was first seen on
-            if track_id not in self.initial_side:
-                self.initial_side[track_id] = side
-
-            if prev_side is None:
-                continue
-
-            # Detect crossing: sign changed between consecutive frames
-            crossed = (prev_side * side <= 0) and (prev_side != 0 or side != 0)
-
-            # Fallback: if we have enough history, check initial vs current side
-            if not crossed and len(hist) >= 5:
-                init = self.initial_side.get(track_id, 0)
-                if init != 0 and side != 0 and init * side < 0:
-                    crossed = True
-
-            if not crossed:
-                continue
-
-            # Determine direction
-            if prev_side != 0:
-                direction_in = side > prev_side
+            # Update min/max range for this ID
+            if track_id not in self._side_range:
+                self._side_range[track_id] = [side, side]
             else:
-                init = self.initial_side.get(track_id, 0)
-                direction_in = side > init
+                rng = self._side_range[track_id]
+                if side < rng[0]:
+                    rng[0] = side
+                if side > rng[1]:
+                    rng[1] = side
 
-            if direction_in:
-                self.state.count_in += 1
-            else:
-                self.state.count_out += 1
+            min_s, max_s = self._side_range[track_id]
 
-            self.counted_ids.add(track_id)
-            counts_changed = True
+            # Crossing: we've seen this track on BOTH sides of the line
+            if min_s < -self.CROSS_MARGIN and max_s > self.CROSS_MARGIN:
+                # Direction: current side determines IN vs OUT
+                if side > 0:
+                    self.state.count_in += 1
+                else:
+                    self.state.count_out += 1
+                self.counted_ids.add(track_id)
+                counts_changed = True
 
-        # Clean up stale IDs to prevent memory leak
-        stale = set(self._track_history.keys()) - active_ids
+        # Clean up stale IDs
+        stale = set(self._side_range.keys()) - active_ids
         for sid in stale:
-            self._track_history.pop(sid, None)
-            self.initial_side.pop(sid, None)
+            self._side_range.pop(sid, None)
+            self._last_side.pop(sid, None)
 
         return counts_changed
 
