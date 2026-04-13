@@ -25,7 +25,7 @@ class ControlPanel:
         self._buttons: List[Tuple[str, Tuple[int, int, int, int], str]] = []
 
         self.width = 900
-        self.height = 500
+        self.height = 550
 
         self.input_active = False
         self.input_action: Optional[str] = None
@@ -65,6 +65,8 @@ class ControlPanel:
         add("USB 1", "usb1")
         add("USB 2", "usb2")
         add("RTSP URL", "rtsp_input")
+        add("IP Webcam", "ipwebcam")
+        add("DroidCam", "droidcam")
         add("Линия выше", "line_up")
         add("Линия ниже", "line_down")
         add("Порог -", "conf_dec")

@@ -324,7 +324,15 @@ def run(config_path: str = "config.json") -> None:
             selected = panel.selected_context()
             if selected is not None:
                 current = selected.stream.source if isinstance(selected.stream.source, str) else "rtsp://"
-                panel.start_input("rtsp_apply", "Введите RTSP URL", str(current))
+                panel.start_input("rtsp_apply", "RTSP URL", str(current))
+        elif action == "ipwebcam":
+            selected = panel.selected_context()
+            if selected is not None:
+                panel.start_input("rtsp_apply", "IP Webcam (http://IP:8080/video)", "http://192.168.1.:8080/video")
+        elif action == "droidcam":
+            selected = panel.selected_context()
+            if selected is not None:
+                panel.start_input("rtsp_apply", "DroidCam (http://IP:4747/video)", "http://192.168.1.:4747/video")
         elif action == "line_up":
             selected = panel.selected_context()
             if selected is not None:
@@ -354,7 +362,18 @@ def run(config_path: str = "config.json") -> None:
             frame = ctx.stream.read()
             if frame is None:
                 placeholder = np.zeros((480, 854, 3), dtype=np.uint8)
-                draw_text(placeholder, f"{ctx.name}: ожидание/переподключение потока...", (30, 220), (100, 200, 255), 26, shadow=True)
+                if ctx.stream.is_connecting:
+                    status_msg = f"{ctx.name}: подключение к {ctx.stream.source}..."
+                    status_color = (100, 255, 255)
+                elif ctx.stream.connected:
+                    status_msg = f"{ctx.name}: ожидание кадра..."
+                    status_color = (100, 255, 180)
+                else:
+                    status_msg = f"{ctx.name}: нет соединения — переподключение..."
+                    status_color = (100, 200, 255)
+                draw_text(placeholder, status_msg, (30, 200), status_color, 24, shadow=True)
+                draw_text(placeholder, f"Источник: {ctx.stream.source}", (30, 240), (180, 180, 180), 20)
+                draw_text(placeholder, "Телефон: установите IP Webcam или DroidCam", (30, 280), (150, 150, 220), 18)
                 cv2.imshow(ctx.name, placeholder)
                 continue
 
