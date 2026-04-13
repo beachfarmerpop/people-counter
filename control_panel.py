@@ -73,6 +73,7 @@ class ControlPanel:
         add("Порог +", "conf_inc")
         add("Скорость -", "proc_dec")
         add("Скорость +", "proc_inc")
+        add("Направление", "direction_toggle")
         add("Сохранить", "save")
         add("Выход", "quit")
 
@@ -170,6 +171,8 @@ class ControlPanel:
         ctx = self.selected_context()
         if ctx is not None:
             src = getattr(ctx.stream, "source", "-")
+            mode = getattr(ctx.counter, "direction_mode", "right_in")
+            mode_text = "Вправо=IN, Влево=OUT" if mode == "right_in" else "Вправо=OUT, Влево=IN"
             draw_text(
                 canvas,
                 f"Выбрана дверь: {ctx.door_id} ({ctx.name})   Источник: {src}",
@@ -178,6 +181,7 @@ class ControlPanel:
                 21,
                 shadow=True,
             )
+            draw_text(canvas, f"Режим направления: {mode_text}", (14, 110), (255, 225, 170), 19, shadow=True)
 
         for label, (x, y, w, h), _action in self._buttons:
             self._rounded_rect(

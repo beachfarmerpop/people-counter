@@ -27,6 +27,7 @@ DEFAULT_CONFIG: Dict = {
     "imgsz": 640,
     "frame_rate": 25,
     "process_every_n_frames": 1,
+    "direction_mode": "right_in",
     "resize_width": 640,
     "periodic_log_sec": 10,
     "reconnect_interval": 2.0,
@@ -169,7 +170,8 @@ def _build_contexts(cfg: Dict, detector: PersonDetector) -> List[StreamContext]:
             max_retries=int(cfg.get("max_retries", 0)),
         )
         tracker = PersonByteTracker(frame_rate=int(cfg.get("frame_rate", 25)))
-        counter = LineCounter(p1=p1, p2=p2)
+        direction_mode = str(s.get("direction_mode", cfg.get("direction_mode", "right_in")))
+        counter = LineCounter(p1=p1, p2=p2, direction_mode=direction_mode)
         dragger = LineDragController()
         logger = CounterCsvLogger(csv_path=str(s.get("csv_path", f"reports/door_{door_id}_counts.csv")))
 
@@ -271,6 +273,7 @@ def run(config_path: str = "config.json") -> None:
                     "enabled": True,
                     "source": c.stream.source,
                     "source_options": c.source_options,
+                    "direction_mode": getattr(c.counter, "direction_mode", "right_in"),
                     "line": [[int(c.counter.p1[0]), int(c.counter.p1[1])], [int(c.counter.p2[0]), int(c.counter.p2[1])]],
                     "csv_path": f"reports/door_{c.door_id}_counts.csv",
                 }
@@ -355,6 +358,10 @@ def run(config_path: str = "config.json") -> None:
             app_state.process_every_n_frames = min(10, app_state.process_every_n_frames + 1)
             for c in contexts:
                 c.process_every_n_frames = app_state.process_every_n_frames
+        elif action == "direction_toggle":
+            selected = panel.selected_context()
+            if selected is not None:
+                selected.counter.toggle_direction_mode()
         elif action == "save":
             _save_runtime_config()
 

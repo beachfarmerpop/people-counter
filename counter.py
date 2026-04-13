@@ -19,17 +19,29 @@ class LineCounter:
 
     CROSS_MARGIN = 5  # noise margin in pixels
 
-    def __init__(self, p1: Point, p2: Point, counting_region: int = 120):
+    def __init__(
+        self,
+        p1: Point,
+        p2: Point,
+        counting_region: int = 120,
+        direction_mode: str = "right_in",
+    ):
         self.p1 = p1
         self.p2 = p2
         self.counting_region = counting_region
+        self.direction_mode = direction_mode if direction_mode in {"right_in", "right_out"} else "right_in"
         self.state = CounterState()
         self.counted_ids: Set[int] = set()
         # min/max signed distance per track_id: {id: [min_side, max_side]}
         self._side_range: Dict[int, list] = {}
-        # current side per track_id (for direction)
+        # last side and x-motion history per track_id
         self._last_side: Dict[int, float] = {}
+        self._x_motion: Dict[int, list] = {}
         self._update_line_vectors()
+
+    def toggle_direction_mode(self) -> str:
+        self.direction_mode = "right_out" if self.direction_mode == "right_in" else "right_in"
+        return self.direction_mode
 
     def set_line(self, p1: Point, p2: Point) -> None:
         self.p1 = p1
@@ -38,6 +50,7 @@ class LineCounter:
         # Reset ranges — line moved, old ranges are meaningless
         self._side_range.clear()
         self._last_side.clear()
+        self._x_motion.clear()
 
     def _update_line_vectors(self) -> None:
         """Pre-compute numpy vectors for distance calculations."""
@@ -74,6 +87,12 @@ class LineCounter:
 
             side = self._signed_distance(point)
             self._last_side[track_id] = side
+            x = int(point[0])
+
+            if track_id not in self._x_motion:
+                self._x_motion[track_id] = [x, x]
+            else:
+                self._x_motion[track_id][1] = x
 
             if track_id in self.counted_ids:
                 continue
@@ -92,8 +111,15 @@ class LineCounter:
 
             # Crossing: we've seen this track on BOTH sides of the line
             if min_s < -self.CROSS_MARGIN and max_s > self.CROSS_MARGIN:
-                # Direction: current side determines IN vs OUT
-                if side > 0:
+                first_x, last_x = self._x_motion.get(track_id, [x, x])
+                moving_right = (last_x - first_x) > 0
+
+                if self.direction_mode == "right_in":
+                    is_in = moving_right
+                else:
+                    is_in = not moving_right
+
+                if is_in:
                     self.state.count_in += 1
                 else:
                     self.state.count_out += 1
@@ -105,6 +131,7 @@ class LineCounter:
         for sid in stale:
             self._side_range.pop(sid, None)
             self._last_side.pop(sid, None)
+            self._x_motion.pop(sid, None)
 
         return counts_changed
 
