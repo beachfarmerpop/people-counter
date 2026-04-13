@@ -41,11 +41,14 @@ class PersonByteTracker:
             x1, y1, x2, y2, track_id = row[:5]
             cx = int((x1 + x2) / 2)
             cy = int((y1 + y2) / 2)
+            # bottom-center = feet position, much better for line crossing
+            bot_cy = int(y2)
             output.append(
                 {
                     "track_id": int(track_id),
                     "bbox": [int(x1), int(y1), int(x2), int(y2)],
                     "center": (cx, cy),
+                    "bottom_center": (cx, bot_cy),
                 }
             )
         return output

@@ -16,12 +16,13 @@ class LineCounter:
     """Track-aware line crossing counter with counting region (inspired by
     casedone/people-counting LineCounter).  Only counts an ID once."""
 
-    def __init__(self, p1: Point, p2: Point, counting_region: int = 80):
+    def __init__(self, p1: Point, p2: Point, counting_region: int = 120):
         self.p1 = p1
         self.p2 = p2
         self.counting_region = counting_region
         self.state = CounterState()
         self.previous_side: Dict[int, float] = {}
+        self.initial_side: Dict[int, float] = {}
         self.counted_ids: Set[int] = set()
         self._track_history: Dict[int, list] = {}
         self._update_line_vectors()
@@ -61,33 +62,50 @@ class LineCounter:
 
         for track in tracks:
             track_id = track["track_id"]
-            center = track["center"]
+            # Use bottom-center (feet) if available, otherwise center
+            point = track.get("bottom_center", track["center"])
             active_ids.add(track_id)
 
             # Keep history for smoothing
             hist = self._track_history.setdefault(track_id, [])
-            hist.append(center)
+            hist.append(point)
             if len(hist) > 30:
                 hist.pop(0)
 
-            side = self._signed_distance(center)
+            side = self._signed_distance(point)
             prev_side = self.previous_side.get(track_id)
             self.previous_side[track_id] = side
 
             if track_id in self.counted_ids:
                 continue
+
+            # Remember which side the ID was first seen on
+            if track_id not in self.initial_side:
+                self.initial_side[track_id] = side
+
             if prev_side is None:
                 continue
 
-            # Sign change means the object crossed the line
-            if prev_side * side > 0:
+            # Detect crossing: sign changed between consecutive frames
+            crossed = (prev_side * side <= 0) and (prev_side != 0 or side != 0)
+
+            # Fallback: if we have enough history, check initial vs current side
+            if not crossed and len(hist) >= 5:
+                init = self.initial_side.get(track_id, 0)
+                if init != 0 and side != 0 and init * side < 0:
+                    crossed = True
+
+            if not crossed:
                 continue
 
-            # Check distance from line (no projection clamp — count even at edges)
-            if abs(side) > self.counting_region:
-                continue
+            # Determine direction
+            if prev_side != 0:
+                direction_in = side > prev_side
+            else:
+                init = self.initial_side.get(track_id, 0)
+                direction_in = side > init
 
-            if side > prev_side:
+            if direction_in:
                 self.state.count_in += 1
             else:
                 self.state.count_out += 1
@@ -99,7 +117,7 @@ class LineCounter:
         stale = set(self._track_history.keys()) - active_ids
         for sid in stale:
             self._track_history.pop(sid, None)
-            # Don't remove from previous_side or counted_ids — they're still valid
+            self.initial_side.pop(sid, None)
 
         return counts_changed
 
