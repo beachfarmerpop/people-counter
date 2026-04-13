@@ -1,0 +1,42 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+
+# Virtual env
+venv*/
+.venv/
+
+# Build artifacts
+build/
+dist/
+CLIENT_PACKAGE/
+*.spec.bak
+
+# Large binaries and archives
+*.zip
+*.rar
+*.7z
+*.onnx
+*.pt
+*.exe
+*.dll
+
+# Data / reports / runtime state
+*.db
+reports/
+*.log
+
+# Media
+*.mp4
+*.mov
+*.avi
+*.jpg
+*.jpeg
+*.png
+
+# OS/editor
+.DS_Store
+Thumbs.db
+.vscode/
