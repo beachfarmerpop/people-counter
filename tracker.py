@@ -12,11 +12,11 @@ class PersonByteTracker:
 
     def __init__(self, frame_rate: int = 25):
         args = SimpleNamespace(
-            track_high_thresh=0.5,
-            track_low_thresh=0.1,
-            new_track_thresh=0.6,
-            track_buffer=30,
-            match_thresh=0.8,
+            track_high_thresh=0.25,
+            track_low_thresh=0.05,
+            new_track_thresh=0.3,
+            track_buffer=90,
+            match_thresh=0.85,
             fuse_score=True,
         )
         self.tracker = BYTETracker(args=args, frame_rate=frame_rate)
@@ -30,7 +30,8 @@ class PersonByteTracker:
             tensor = torch.empty((0, 6), dtype=torch.float32)
 
         boxes = Boxes(tensor, orig_shape=(h, w))
-        tracked = self.tracker.update(boxes, img=np.zeros((h, w, 3), dtype=np.uint8))
+        # Pass a tiny dummy image — ByteTrack doesn't actually use pixel data
+        tracked = self.tracker.update(boxes, img=np.empty((1, 1, 3), dtype=np.uint8))
 
         output: List[Dict] = []
         if tracked is None or len(tracked) == 0:

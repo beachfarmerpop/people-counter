@@ -23,11 +23,11 @@ from video_stream import VideoStream
 
 DEFAULT_CONFIG: Dict = {
     "model_path": "yolov8n.pt",
-    "conf_threshold": 0.4,
+    "conf_threshold": 0.3,
     "imgsz": 640,
     "frame_rate": 25,
-    "process_every_n_frames": 2,
-    "resize_width": 960,
+    "process_every_n_frames": 1,
+    "resize_width": 640,
     "periodic_log_sec": 10,
     "reconnect_interval": 2.0,
     "max_retries": 0,

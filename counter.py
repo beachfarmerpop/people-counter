@@ -16,13 +16,14 @@ class LineCounter:
     """Track-aware line crossing counter with counting region (inspired by
     casedone/people-counting LineCounter).  Only counts an ID once."""
 
-    def __init__(self, p1: Point, p2: Point, counting_region: int = 50):
+    def __init__(self, p1: Point, p2: Point, counting_region: int = 80):
         self.p1 = p1
         self.p2 = p2
         self.counting_region = counting_region
         self.state = CounterState()
         self.previous_side: Dict[int, float] = {}
         self.counted_ids: Set[int] = set()
+        self._track_history: Dict[int, list] = {}
         self._update_line_vectors()
 
     def set_line(self, p1: Point, p2: Point) -> None:
@@ -56,10 +57,18 @@ class LineCounter:
 
     def update(self, tracks: List[Dict]) -> bool:
         counts_changed = False
+        active_ids = set()
 
         for track in tracks:
             track_id = track["track_id"]
             center = track["center"]
+            active_ids.add(track_id)
+
+            # Keep history for smoothing
+            hist = self._track_history.setdefault(track_id, [])
+            hist.append(center)
+            if len(hist) > 30:
+                hist.pop(0)
 
             side = self._signed_distance(center)
             prev_side = self.previous_side.get(track_id)
@@ -74,8 +83,8 @@ class LineCounter:
             if prev_side * side > 0:
                 continue
 
-            # Only count if the object is near the line segment
-            if not self._is_near_line(center):
+            # Check distance from line (no projection clamp — count even at edges)
+            if abs(side) > self.counting_region:
                 continue
 
             if side > prev_side:
@@ -85,6 +94,12 @@ class LineCounter:
 
             self.counted_ids.add(track_id)
             counts_changed = True
+
+        # Clean up stale IDs to prevent memory leak
+        stale = set(self._track_history.keys()) - active_ids
+        for sid in stale:
+            self._track_history.pop(sid, None)
+            # Don't remove from previous_side or counted_ids — they're still valid
 
         return counts_changed
 
