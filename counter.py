@@ -13,11 +13,9 @@ class CounterState:
 
 
 class LineCounter:
-    """Robust line crossing counter.  Tracks min/max signed distance
-    for each track_id — if both sides of the line were observed, the
-    person definitively crossed.  Works even with unstable IDs."""
+    """Line crossing counter using persistent track state by track_id."""
 
-    X_CROSS_MARGIN = 8  # noise margin for horizontal crossing around gate X
+    CROSS_MARGIN = 3
 
     def __init__(
         self,
@@ -31,9 +29,8 @@ class LineCounter:
         self.counting_region = counting_region
         self.direction_mode = direction_mode if direction_mode in {"right_in", "right_out"} else "right_in"
         self.state = CounterState()
+        self.track_history: Dict[int, Point] = {}
         self.counted_ids: Set[int] = set()
-        # previous side by gate X per track_id
-        self._prev_gate_side: Dict[int, float] = {}
         self._update_line_vectors()
 
     def toggle_direction_mode(self) -> str:
@@ -44,8 +41,8 @@ class LineCounter:
         self.p1 = p1
         self.p2 = p2
         self._update_line_vectors()
-        # Reset ranges — line moved, old ranges are meaningless
-        self._prev_gate_side.clear()
+        # Line moved: keep counted IDs but clear motion history.
+        self.track_history.clear()
 
     def _update_line_vectors(self) -> None:
         """Pre-compute numpy vectors for distance calculations."""
@@ -74,7 +71,7 @@ class LineCounter:
     def update(self, tracks: List[Dict]) -> bool:
         counts_changed = False
         active_ids = set()
-        gate_x = (self.p1[0] + self.p2[0]) / 2.0
+        line_y = int((self.p1[1] + self.p2[1]) / 2)
 
         for track in tracks:
             track_id = track["track_id"]
@@ -84,38 +81,36 @@ class LineCounter:
             if track_id in self.counted_ids:
                 continue
 
-            # Only evaluate crossing when the person is inside line corridor.
-            if not self._is_near_line(point):
+            prev_point = self.track_history.get(track_id)
+            self.track_history[track_id] = point
+
+            if prev_point is None:
                 continue
 
-            gate_side = float(point[0]) - gate_x
-            prev_side = self._prev_gate_side.get(track_id)
-            self._prev_gate_side[track_id] = gate_side
+            prev_y = int(prev_point[1])
+            cur_y = int(point[1])
 
-            if prev_side is None:
+            crossed_down = prev_y < (line_y - self.CROSS_MARGIN) and cur_y >= (line_y + self.CROSS_MARGIN)
+            crossed_up = prev_y > (line_y + self.CROSS_MARGIN) and cur_y <= (line_y - self.CROSS_MARGIN)
+
+            if not crossed_down and not crossed_up:
                 continue
 
-            crossed_right = prev_side < -self.X_CROSS_MARGIN and gate_side > self.X_CROSS_MARGIN
-            crossed_left = prev_side > self.X_CROSS_MARGIN and gate_side < -self.X_CROSS_MARGIN
-
-            if not crossed_right and not crossed_left:
+            if not (self._is_near_line(point) or self._is_near_line(prev_point)):
                 continue
 
-            moving_right = crossed_right
-            is_in = moving_right if self.direction_mode == "right_in" else (not moving_right)
-
-            if is_in:
+            if crossed_down:
                 self.state.count_in += 1
-            else:
+            elif crossed_up:
                 self.state.count_out += 1
 
             self.counted_ids.add(track_id)
             counts_changed = True
 
         # Clean up stale IDs
-        stale = set(self._prev_gate_side.keys()) - active_ids
+        stale = set(self.track_history.keys()) - active_ids
         for sid in stale:
-            self._prev_gate_side.pop(sid, None)
+            self.track_history.pop(sid, None)
 
         return counts_changed
 
